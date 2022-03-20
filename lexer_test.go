@@ -255,6 +255,11 @@ func Test(t *testing.T) {
 			input: "NULLL",
 			err:   ErrInvalidKeyword{s: "NULLL"},
 		},
+		{
+			name:   "parse not",
+			input:  "!",
+			tokens: []Token{{kind: Not}},
+		},
 	}
 
 	for _, tc := range tests {

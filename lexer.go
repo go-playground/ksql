@@ -92,6 +92,8 @@ func tokenizeSingleToken(data []byte) (result Result, err error) {
 		result = Result{token: Token{kind: CloseBracket}, end: 1}
 	case ',':
 		result = Result{token: Token{kind: Comma}, end: 1}
+	case '!':
+		result = Result{token: Token{kind: Not}, end: 1}
 	case '"', '\'':
 		result, err = tokenizeString(data, b)
 	case '.':
