@@ -38,6 +38,7 @@ const (
 	Lte
 	And
 	Or
+	Not
 	Contains
 	In
 	StartsWith
@@ -97,10 +98,18 @@ func tokenizeSingleToken(data []byte) (result Result, err error) {
 		result, err = tokenizeIdentifier(data)
 	case 't', 'f':
 		result, err = tokenizeBool(data)
-	case 'A':
-		result, err = tokenizeKeyword(data, "AND", And)
-	case 'O':
-		result, err = tokenizeKeyword(data, "OR", Or)
+	case '&':
+		if len(data) > 1 && data[1] == '&' {
+			result = Result{token: Token{kind: And}, end: 2}
+		} else {
+			err = ErrUnsupportedCharacter{b: b}
+		}
+	case '|':
+		if len(data) > 1 && data[1] == '|' {
+			result = Result{token: Token{kind: Or}, end: 2}
+		} else {
+			err = ErrUnsupportedCharacter{b: b}
+		}
 	case 'C':
 		result, err = tokenizeKeyword(data, "CONTAINS", Contains)
 	case 'I':

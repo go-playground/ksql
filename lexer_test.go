@@ -187,7 +187,7 @@ func Test(t *testing.T) {
 		},
 		{
 			name:   "parse or",
-			input:  " OR ",
+			input:  "||",
 			tokens: []Token{{kind: Or}},
 		},
 		{
@@ -212,7 +212,7 @@ func Test(t *testing.T) {
 		},
 		{
 			name:   "parse AND",
-			input:  " AND ",
+			input:  "&&",
 			tokens: []Token{{kind: And}},
 		},
 		{
@@ -222,8 +222,8 @@ func Test(t *testing.T) {
 		},
 		{
 			name:  "parse bad or",
-			input: " OR",
-			err:   ErrInvalidKeyword{s: "OR"},
+			input: "|",
+			err:   ErrInvalidKeyword{s: "|"},
 		},
 		{
 			name:  "parse bad in",
@@ -247,8 +247,8 @@ func Test(t *testing.T) {
 		},
 		{
 			name:  "parse bad AND",
-			input: " AND",
-			err:   ErrInvalidKeyword{s: "AND"},
+			input: "&",
+			err:   ErrInvalidKeyword{s: "&"},
 		},
 		{
 			name:  "parse bad NULL",
