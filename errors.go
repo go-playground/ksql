@@ -4,6 +4,8 @@ import (
 	"fmt"
 )
 
+// Lexer errors
+
 // ErrUnsupportedCharacter represents an unsupported character is expression being lexed.
 type ErrUnsupportedCharacter struct {
 	b byte
@@ -56,4 +58,15 @@ type ErrInvalidNumber struct {
 
 func (e ErrInvalidNumber) Error() string {
 	return fmt.Sprintf("Invalid number `%s`", e.s)
+}
+
+// Parser errors
+
+// ErrUnsupportedTypeComparison represents a comparison of incompatible types
+type ErrUnsupportedTypeComparison struct {
+	s string
+}
+
+func (e ErrUnsupportedTypeComparison) Error() string {
+	return fmt.Sprintf("unsupported type comparison: `%s`", e.s)
 }

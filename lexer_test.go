@@ -102,7 +102,7 @@ func Test(t *testing.T) {
 		},
 		{
 			name:   "parse equals",
-			input:  "=",
+			input:  "==",
 			tokens: []Token{{kind: Equals}},
 		},
 		{
@@ -276,5 +276,4 @@ func Test(t *testing.T) {
 			}
 		})
 	}
-
 }

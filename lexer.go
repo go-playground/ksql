@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-// Result represents a token lexed result
-type Result struct {
+// LexerResult represents a token lexed result
+type LexerResult struct {
 	token Token
 	end   int
 }
@@ -51,49 +51,53 @@ const (
 )
 
 /// Try to lex a single token from the input stream.
-func tokenizeSingleToken(data []byte) (result Result, err error) {
+func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 	b := data[0]
 
 	switch b {
 	case '=':
-		result = Result{token: Token{kind: Equals}, end: 1}
+		if len(data) > 1 && data[1] == '=' {
+			result = LexerResult{token: Token{kind: Equals}, end: 2}
+		} else {
+			result = LexerResult{token: Token{kind: Equals}, end: 1}
+		}
 	case '+':
-		result = Result{token: Token{kind: Add}, end: 1}
+		result = LexerResult{token: Token{kind: Add}, end: 1}
 	case '-':
-		result = Result{token: Token{kind: Subtract}, end: 1}
+		result = LexerResult{token: Token{kind: Subtract}, end: 1}
 	case '*':
-		result = Result{token: Token{kind: Multiply}, end: 1}
+		result = LexerResult{token: Token{kind: Multiply}, end: 1}
 	case '/':
-		result = Result{token: Token{kind: Divide}, end: 1}
+		result = LexerResult{token: Token{kind: Divide}, end: 1}
 	case '>':
 		if len(data) > 1 && data[1] == '=' {
-			result = Result{token: Token{kind: Gte}, end: 2}
+			result = LexerResult{token: Token{kind: Gte}, end: 2}
 
 		} else if len(data) > 1 {
 			err = ErrUnsupportedCharacter{b: b}
 		} else {
-			result = Result{token: Token{kind: Gt}, end: 1}
+			result = LexerResult{token: Token{kind: Gt}, end: 1}
 		}
 	case '<':
 		if len(data) > 1 && data[1] == '=' {
-			result = Result{token: Token{kind: Lte}, end: 2}
+			result = LexerResult{token: Token{kind: Lte}, end: 2}
 		} else if len(data) > 1 {
 			err = ErrUnsupportedCharacter{b: b}
 		} else {
-			result = Result{token: Token{kind: Lt}, end: 1}
+			result = LexerResult{token: Token{kind: Lt}, end: 1}
 		}
 	case '(':
-		result = Result{token: Token{kind: OpenParen}, end: 1}
+		result = LexerResult{token: Token{kind: OpenParen}, end: 1}
 	case ')':
-		result = Result{token: Token{kind: CloseParen}, end: 1}
+		result = LexerResult{token: Token{kind: CloseParen}, end: 1}
 	case '[':
-		result = Result{token: Token{kind: OpenBracket}, end: 1}
+		result = LexerResult{token: Token{kind: OpenBracket}, end: 1}
 	case ']':
-		result = Result{token: Token{kind: CloseBracket}, end: 1}
+		result = LexerResult{token: Token{kind: CloseBracket}, end: 1}
 	case ',':
-		result = Result{token: Token{kind: Comma}, end: 1}
+		result = LexerResult{token: Token{kind: Comma}, end: 1}
 	case '!':
-		result = Result{token: Token{kind: Not}, end: 1}
+		result = LexerResult{token: Token{kind: Not}, end: 1}
 	case '"', '\'':
 		result, err = tokenizeString(data, b)
 	case '.':
@@ -102,13 +106,13 @@ func tokenizeSingleToken(data []byte) (result Result, err error) {
 		result, err = tokenizeBool(data)
 	case '&':
 		if len(data) > 1 && data[1] == '&' {
-			result = Result{token: Token{kind: And}, end: 2}
+			result = LexerResult{token: Token{kind: And}, end: 2}
 		} else {
 			err = ErrUnsupportedCharacter{b: b}
 		}
 	case '|':
 		if len(data) > 1 && data[1] == '|' {
-			result = Result{token: Token{kind: Or}, end: 2}
+			result = LexerResult{token: Token{kind: Or}, end: 2}
 		} else {
 			err = ErrUnsupportedCharacter{b: b}
 		}
@@ -133,7 +137,7 @@ func tokenizeSingleToken(data []byte) (result Result, err error) {
 	return
 }
 
-func tokenizeNumber(data []byte) (result Result, err error) {
+func tokenizeNumber(data []byte) (result LexerResult, err error) {
 	var dotSeen, badNumber bool
 
 	end := takeWhile(data, func(b byte) bool {
@@ -157,7 +161,7 @@ func tokenizeNumber(data []byte) (result Result, err error) {
 		if err != nil {
 			err = ErrInvalidNumber{s: string(data[:end])}
 		} else {
-			result = Result{
+			result = LexerResult{
 				token: Token{
 					kind:  Number,
 					value: n,
@@ -171,12 +175,12 @@ func tokenizeNumber(data []byte) (result Result, err error) {
 	return
 }
 
-func tokenizeKeyword(data []byte, keyword string, kind TokenKind) (result Result, err error) {
+func tokenizeKeyword(data []byte, keyword string, kind TokenKind) (result LexerResult, err error) {
 	end := takeWhile(data, func(b byte) bool {
 		return !isWhitespace(b)
 	})
 	if end > 0 && string(data[:end]) == keyword && len(data) > len(keyword) {
-		result = Result{
+		result = LexerResult{
 			token: Token{
 				kind: kind,
 			},
@@ -188,12 +192,12 @@ func tokenizeKeyword(data []byte, keyword string, kind TokenKind) (result Result
 	return
 }
 
-func tokenizeNull(data []byte) (result Result, err error) {
+func tokenizeNull(data []byte) (result LexerResult, err error) {
 	end := takeWhile(data, func(b byte) bool {
 		return isAlphabetical(b)
 	})
 	if end > 0 && string(data[:end]) == "NULL" {
-		result = Result{
+		result = LexerResult{
 			token: Token{
 				kind: Null,
 			},
@@ -205,14 +209,14 @@ func tokenizeNull(data []byte) (result Result, err error) {
 	return
 }
 
-func tokenizeBool(data []byte) (result Result, err error) {
+func tokenizeBool(data []byte) (result LexerResult, err error) {
 	end := takeWhile(data, func(b byte) bool {
 		return isAlphabetical(b)
 	})
 	if end > 0 {
 		switch string(data[:end]) {
 		case "true":
-			result = Result{
+			result = LexerResult{
 				token: Token{
 					kind:  Boolean,
 					value: true,
@@ -220,7 +224,7 @@ func tokenizeBool(data []byte) (result Result, err error) {
 				end: end,
 			}
 		case "false":
-			result = Result{
+			result = LexerResult{
 				token: Token{
 					kind:  Boolean,
 					value: false,
@@ -236,7 +240,7 @@ func tokenizeBool(data []byte) (result Result, err error) {
 	return
 }
 
-func tokenizeIdentifier(data []byte) (result Result, err error) {
+func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 	end := takeWhile(data[1:], func(b byte) bool {
 		return !isWhitespace(b) && b != ')' && b != ']'
 	})
@@ -244,7 +248,7 @@ func tokenizeIdentifier(data []byte) (result Result, err error) {
 		if len(data) > end {
 			end += 1
 		}
-		result = Result{token: Token{
+		result = LexerResult{token: Token{
 			kind:  Identifier,
 			value: string(data[1:end]),
 		}, end: end}
@@ -254,7 +258,7 @@ func tokenizeIdentifier(data []byte) (result Result, err error) {
 	return
 }
 
-func tokenizeString(data []byte, quote byte) (result Result, err error) {
+func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 	var lastBackslash, endedWithoutTerminator bool
 
 	end := takeWhile(data[1:], func(b byte) bool {
@@ -278,7 +282,7 @@ func tokenizeString(data []byte, quote byte) (result Result, err error) {
 		if !endedWithoutTerminator {
 			err = ErrUnterminatedString{s: string(data)}
 		} else {
-			result = Result{token: Token{
+			result = LexerResult{token: Token{
 				kind:  String,
 				value: string(data[1 : end+1]),
 			}, end: end + 2}
@@ -287,7 +291,7 @@ func tokenizeString(data []byte, quote byte) (result Result, err error) {
 		if !endedWithoutTerminator || len(data) < 2 {
 			err = ErrUnterminatedString{s: string(data)}
 		} else {
-			result = Result{token: Token{
+			result = LexerResult{token: Token{
 				kind:  String,
 				value: string(data[:0]),
 			}, end: 1}
@@ -342,7 +346,7 @@ func (t *Tokenizer) skipWhitespace() {
 }
 
 func (t *Tokenizer) next() (token Token, err error) {
-	var result Result
+	var result LexerResult
 	result, err = tokenizeSingleToken(t.remaining)
 	if err != nil {
 		return
