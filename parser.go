@@ -392,7 +392,6 @@ func (a add) Calculate(src []byte) (any, error) {
 
 	switch l := left.(type) {
 	case string:
-		fmt.Println("str")
 		return l + right.(string), nil
 	case float64:
 		return l + right.(float64), nil
