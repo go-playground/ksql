@@ -238,7 +238,7 @@ func tokenizeBool(data []byte) (result Result, err error) {
 
 func tokenizeIdentifier(data []byte) (result Result, err error) {
 	end := takeWhile(data[1:], func(b byte) bool {
-		return !isWhitespace(b)
+		return !isWhitespace(b) && b != ')' && b != ']'
 	})
 	if end > 0 {
 		if len(data) > end {
