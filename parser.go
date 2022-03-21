@@ -40,6 +40,9 @@ func Parse(expression []byte) (Expression, error) {
 }
 
 func parseValue(tokens []Token, pos *int) (Expression, error) {
+	if *pos > len(tokens)-1 {
+		return nil, nil
+	}
 	tok := tokens[*pos]
 	*pos += 1
 
@@ -503,8 +506,52 @@ func (e eq) Calculate(src []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return left == right, nil
+	return reflect.DeepEqual(left, right), nil
 }
+
+//func equals(left, right interface{}) (bool, error) {
+//	reflect.DeepEqual()
+//	if left == nil && right == nil {
+//		return true, nil
+//	} else if (left == nil && right != nil) || (left != nil && right == nil) {
+//		return false, nil
+//	}
+//
+//	lv := reflect.ValueOf(left)
+//	rv := reflect.ValueOf(right)
+//
+//	if lv.IsZero() || rv.IsZero() {
+//		return false, nil
+//	}
+//
+//	if lv.Type() != rv.Type() {
+//		return false, nil
+//	}
+//
+//	if lv.Kind() == reflect.Array {
+//		ra := right.([]interface{})
+//		la := right.([]interface{})
+//		if len(ra) != len(la) {
+//			return false, nil
+//		}
+//		for i, r := range ra {
+//			isEq, err := equals(la[i], r)
+//			if err != nil {
+//				return false, err
+//			}
+//			if !isEq {
+//				return false, nil
+//			}
+//		}
+//		return true, nil
+//	} else if lv.Kind() == reflect.Map {
+//
+//	}
+//	if !lv.Type().Comparable() || !rv.Type().Comparable() {
+//		return false, nil
+//	}
+//	return left == right, nil
+//}
 
 var _ Expression = (*gt)(nil)
 
@@ -809,10 +856,6 @@ func (i in) Calculate(src []byte) (any, error) {
 	right, err := i.right.Calculate(src)
 	if err != nil {
 		return nil, err
-	}
-
-	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s ENDSWITH %s", left, right)}
 	}
 
 	arr, ok := right.([]interface{})

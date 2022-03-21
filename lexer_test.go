@@ -271,9 +271,10 @@ func Test(t *testing.T) {
 			tokens, err := Tokenize([]byte(tc.input))
 			if tc.err != nil {
 				assert.Error(err)
-			} else {
-				assert.Equal(tc.tokens, tokens)
+				return
 			}
+			assert.NoError(err)
+			assert.Equal(tc.tokens, tokens)
 		})
 	}
 }

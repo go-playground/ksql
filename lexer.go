@@ -73,16 +73,12 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 		if len(data) > 1 && data[1] == '=' {
 			result = LexerResult{token: Token{kind: Gte}, end: 2}
 
-		} else if len(data) > 1 {
-			err = ErrUnsupportedCharacter{b: b}
 		} else {
 			result = LexerResult{token: Token{kind: Gt}, end: 1}
 		}
 	case '<':
 		if len(data) > 1 && data[1] == '=' {
 			result = LexerResult{token: Token{kind: Lte}, end: 2}
-		} else if len(data) > 1 {
-			err = ErrUnsupportedCharacter{b: b}
 		} else {
 			result = LexerResult{token: Token{kind: Lt}, end: 1}
 		}
@@ -259,8 +255,8 @@ func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 }
 
 func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
-	var lastBackslash, endedWithoutTerminator bool
-
+	var lastBackslash, endedWithTerminator bool
+	
 	end := takeWhile(data[1:], func(b byte) bool {
 		switch b {
 		case '\\':
@@ -271,7 +267,7 @@ func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 				lastBackslash = false
 				return true
 			}
-			endedWithoutTerminator = true
+			endedWithTerminator = true
 			return false
 		default:
 			return true
@@ -279,22 +275,23 @@ func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 	})
 
 	if end > 0 {
-		if !endedWithoutTerminator {
-			err = ErrUnterminatedString{s: string(data)}
-		} else {
+		if endedWithTerminator {
 			result = LexerResult{token: Token{
 				kind:  String,
 				value: string(data[1 : end+1]),
 			}, end: end + 2}
+
+		} else {
+			err = ErrUnterminatedString{s: string(data)}
 		}
 	} else {
-		if !endedWithoutTerminator || len(data) < 2 {
+		if !endedWithTerminator || len(data) < 2 {
 			err = ErrUnterminatedString{s: string(data)}
 		} else {
 			result = LexerResult{token: Token{
 				kind:  String,
 				value: string(data[:0]),
-			}, end: 1}
+			}, end: 2}
 		}
 	}
 	return
