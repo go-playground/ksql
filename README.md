@@ -6,6 +6,9 @@ ksql
 
 **Is a JSON data expression lexer, parser, cli and library.**
 
+#### Requirements
+- Go 1.18+
+
 #### How to install CLI
 ```shell
 ~ go install github.com/go-playground/ksql
