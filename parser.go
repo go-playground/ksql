@@ -509,50 +509,6 @@ func (e eq) Calculate(src []byte) (any, error) {
 	return reflect.DeepEqual(left, right), nil
 }
 
-//func equals(left, right interface{}) (bool, error) {
-//	reflect.DeepEqual()
-//	if left == nil && right == nil {
-//		return true, nil
-//	} else if (left == nil && right != nil) || (left != nil && right == nil) {
-//		return false, nil
-//	}
-//
-//	lv := reflect.ValueOf(left)
-//	rv := reflect.ValueOf(right)
-//
-//	if lv.IsZero() || rv.IsZero() {
-//		return false, nil
-//	}
-//
-//	if lv.Type() != rv.Type() {
-//		return false, nil
-//	}
-//
-//	if lv.Kind() == reflect.Array {
-//		ra := right.([]interface{})
-//		la := right.([]interface{})
-//		if len(ra) != len(la) {
-//			return false, nil
-//		}
-//		for i, r := range ra {
-//			isEq, err := equals(la[i], r)
-//			if err != nil {
-//				return false, err
-//			}
-//			if !isEq {
-//				return false, nil
-//			}
-//		}
-//		return true, nil
-//	} else if lv.Kind() == reflect.Map {
-//
-//	}
-//	if !lv.Type().Comparable() || !rv.Type().Comparable() {
-//		return false, nil
-//	}
-//	return left == right, nil
-//}
-
 var _ Expression = (*gt)(nil)
 
 type gt struct {
@@ -858,7 +814,7 @@ func (i in) Calculate(src []byte) (any, error) {
 		return nil, err
 	}
 
-	arr, ok := right.([]interface{})
+	arr, ok := right.([]any)
 	if !ok {
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s IN %s !", left, right)}
 	}
@@ -877,7 +833,7 @@ type array struct {
 }
 
 func (a array) Calculate(src []byte) (any, error) {
-	arr := make([]interface{}, 0, len(a.vec))
+	arr := make([]any, 0, len(a.vec))
 	for _, v := range a.vec {
 		res, err := v.Calculate(src)
 		if err != nil {

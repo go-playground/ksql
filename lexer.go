@@ -15,7 +15,7 @@ type LexerResult struct {
 // Token represents a lexed token with value
 type Token struct {
 	kind  TokenKind
-	value interface{}
+	value any
 }
 
 // TokenKind is the type of token lexed.
