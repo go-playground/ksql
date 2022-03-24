@@ -153,7 +153,8 @@ func tokenizeNumber(data []byte) (result LexerResult, err error) {
 	})
 
 	if end > 0 && !badNumber {
-		n, err := strconv.ParseFloat(string(data[:end]), 64)
+		var n float64
+		n, err = strconv.ParseFloat(string(data[:end]), 64)
 		if err != nil {
 			err = ErrInvalidNumber{s: string(data[:end])}
 		} else {
@@ -256,7 +257,7 @@ func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 
 func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 	var lastBackslash, endedWithTerminator bool
-	
+
 	end := takeWhile(data[1:], func(b byte) bool {
 		switch b {
 		case '\\':
@@ -371,7 +372,6 @@ func Tokenize(src []byte) (tokens []Token, err error) {
 		}
 		tokens = append(tokens, token)
 	}
-	return
 }
 
 func isAlphanumeric(c byte) bool {

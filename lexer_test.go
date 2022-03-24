@@ -267,7 +267,6 @@ func Test(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			Tokenize([]byte(tc.input))
 			tokens, err := Tokenize([]byte(tc.input))
 			if tc.err != nil {
 				assert.Error(err)
