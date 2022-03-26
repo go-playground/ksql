@@ -11,7 +11,7 @@ ksql
 
 #### How to install CLI
 ```shell
-~ go install github.com/go-playground/ksql
+~ go install github.com/go-playground/ksql/cmd/ksql
 ```
 
 #### Usage
