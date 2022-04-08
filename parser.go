@@ -390,6 +390,17 @@ func (a add) Calculate(src []byte) (any, error) {
 	}
 
 	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		if left != nil && right == nil {
+			switch left.(type) {
+			case string, float64:
+				return left, nil
+			}
+		} else if right != nil && left == nil {
+			switch right.(type) {
+			case string, float64:
+				return right, nil
+			}
+		}
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s + %s", left, right)}
 	}
 
