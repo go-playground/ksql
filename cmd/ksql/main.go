@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -35,10 +36,20 @@ func main() {
 				fmt.Fprintln(os.Stderr, "reading standard input:", err)
 				return
 			}
-			if _, err = fmt.Fprintln(w, result); err != nil {
+			b, err := json.Marshal(result)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "converting results to JSON:", err)
+				return
+			}
+			if _, err = w.Write(b); err != nil {
 				fmt.Fprintln(os.Stderr, "writing standard output:", err)
 				return
 			}
+			if _, err = os.Stdout.Write([]byte{'\n'}); err != nil {
+				fmt.Fprintln(os.Stderr, "writing standard output:", err)
+				return
+			}
+
 		}
 		if err := scanner.Err(); err != nil {
 			fmt.Fprintln(os.Stderr, "reading standard input:", err)
@@ -53,7 +64,19 @@ func main() {
 			usage()
 			return
 		}
-		fmt.Println(result)
+		b, err := json.Marshal(result)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "converting results to JSON:", err)
+			return
+		}
+		if _, err = os.Stdout.Write(b); err != nil {
+			fmt.Fprintln(os.Stderr, "writing standard output:", err)
+			return
+		}
+		if _, err = os.Stdout.Write([]byte{'\n'}); err != nil {
+			fmt.Fprintln(os.Stderr, "writing standard output:", err)
+			return
+		}
 	}
 }
 
