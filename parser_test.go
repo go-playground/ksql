@@ -199,6 +199,18 @@ func TestParser(t *testing.T) {
 			expected: false,
 		},
 		{
+			name: 		"ident IN value true",
+			exp:		`.field1 IN ["test"]`,
+			src: 		`{"field1":"test"}`,
+			expected:	true,
+		},
+		{
+			name: 		"ident IN value true multiple",
+			exp:		`.field1 IN ["test","foo","bar",]`,
+			src: 		`{"field1":"test"}`,
+			expected:	true,
+		},
+		{
 			name:     "array eq false",
 			exp:      `[] == ["test"]`,
 			expected: false,
