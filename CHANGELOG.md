@@ -6,7 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2022-06-08
+## [0.1.2] - 2022-06-08
+### Fixed
+- Handling of commas in arrays.
+
+## [0.1.1] - 2022-06-08
 ### Fixed
 - CLI output to be JSON.
 
