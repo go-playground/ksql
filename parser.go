@@ -316,7 +316,7 @@ func parseOp(value Expression, tokens []Token, pos *int) (Expression, error) {
 			return nil, errors.New("no value between ()")
 		}
 		return parseOp(op, tokens, pos)
-	case CloseParen, CloseBracket:
+	case CloseParen, CloseBracket, Comma:
 		return value, nil
 	default:
 		return nil, fmt.Errorf("invalid token after ident %d %s", tok.kind, tok.value)
