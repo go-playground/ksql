@@ -20,12 +20,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse double quote string",
 			input:  "\"quoted\"",
-			tokens: []Token{{kind: String, start: 0, len: 8}},
+			tokens: []Token{{kind: QuotedString, start: 0, len: 8}},
 		},
 		{
 			name:   "parse double quote string blank",
 			input:  "\"\"",
-			tokens: []Token{{kind: String, start: 0, len: 2}},
+			tokens: []Token{{kind: QuotedString, start: 0, len: 2}},
 		},
 		{
 			name:  "parse double quote string unterminated",
@@ -40,12 +40,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse single quote string",
 			input:  "'quoted'",
-			tokens: []Token{{kind: String, start: 0, len: 8}},
+			tokens: []Token{{kind: QuotedString, start: 0, len: 8}},
 		},
 		{
 			name:   "parse single quote string blank",
 			input:  "''",
-			tokens: []Token{{kind: String, start: 0, len: 2}},
+			tokens: []Token{{kind: QuotedString, start: 0, len: 2}},
 		},
 		{
 			name:  "parse single quote string unterminated",
@@ -95,7 +95,7 @@ func Test(t *testing.T) {
 		{
 			name:   "parse identifier",
 			input:  ".properties.first_name",
-			tokens: []Token{{kind: Identifier, len: 22}},
+			tokens: []Token{{kind: SelectorPath, len: 22}},
 		},
 		{
 			name:  "parse identifier blank",
@@ -173,33 +173,33 @@ func Test(t *testing.T) {
 			tokens: []Token{{kind: Comma, len: 1}},
 		},
 		{
-			name:  "parse add ident",
+			name:  "parse add selectorPath",
 			input: ".field1 + .field2",
 			tokens: []Token{
-				{kind: Identifier, len: 7},
+				{kind: SelectorPath, len: 7},
 				{kind: Add, start: 8, len: 1},
-				{kind: Identifier, start: 10, len: 7},
+				{kind: SelectorPath, start: 10, len: 7},
 			},
 		},
 		{
-			name:  "parse sub ident",
+			name:  "parse sub selectorPath",
 			input: ".field1 - .field2",
 			tokens: []Token{
-				{kind: Identifier, len: 7},
+				{kind: SelectorPath, len: 7},
 				{kind: Subtract, start: 8, len: 1},
-				{kind: Identifier, start: 10, len: 7},
+				{kind: SelectorPath, start: 10, len: 7},
 			},
 		},
 		{
 			name:  "parse brackets",
 			input: ".field1 - ( .field2 + .field3 )",
 			tokens: []Token{
-				{kind: Identifier, len: 7},
+				{kind: SelectorPath, len: 7},
 				{kind: Subtract, start: 8, len: 1},
 				{kind: OpenParen, start: 10, len: 1},
-				{kind: Identifier, start: 12, len: 7},
+				{kind: SelectorPath, start: 12, len: 7},
 				{kind: Add, start: 20, len: 1},
-				{kind: Identifier, start: 22, len: 7},
+				{kind: SelectorPath, start: 22, len: 7},
 				{kind: CloseParen, start: 30, len: 1},
 			},
 		},

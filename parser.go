@@ -1,74 +1,420 @@
 package ksql
 
-//
-//import (
-//	"errors"
-//	"fmt"
-//	"reflect"
-//	"strings"
-//
-//	"github.com/tidwall/gjson"
-//)
-//
-//type Expression interface {
-//
-//	// Calculate will execute the parsed expression and apply it against the supplied data.
-//	//
-//	// # Errors
-//	//
-//	// Will return `Err` if the expression cannot be applied to the supplied data due to invalid
-//	// data type comparisons.
-//	Calculate(src []byte) (any, error)
-//}
-//
-//// Parse lex's' the provided expression and returns an Expression to be used/applied to data.
-//func Parse(expression []byte) (Expression, error) {
-//	tokens, err := Tokenize(expression)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	pos := new(int)
-//	result, err := parseValue(tokens, pos)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if result == nil {
-//		return nil, errors.New("no expression results found")
-//	}
-//	return result, nil
-//}
-//
-//func parseExpression(tokens []Token, pos *int) (current Expression, err error) {
-//
-//	for {
-//		if *pos > len(tokens)-1 {
-//			if current == nil {
-//				return nil,nil
-//			}
-//			return current, nil
-//		}
-//		token := tokens[*pos]
-//		*pos += 1
-//
-//		if current == nil {
-//			// look for nextToken value
-//			current,err = parseValue(tokens,pos, token)
-//			if err!=nil{
-//				return nil,err
-//			}
-//
-//		} else {
-//			if token.kind == CloseParen {
-//				return current,nil
-//			}
-//			// look for nextToken operation
-//			current = parseOperation(tokens,pos,token, current)?;
-//		}
-//	}
-//}
-//
+import (
+	"errors"
+	"fmt"
+	"io"
+	"reflect"
+	"strconv"
+	"strings"
+
+	"github.com/tidwall/gjson"
+)
+
+type Expression interface {
+
+	// Calculate will execute the parsed expression and apply it against the supplied data.
+	//
+	// # Errors
+	//
+	// Will return `Err` if the expression cannot be applied to the supplied data due to invalid
+	// data type comparisons.
+	Calculate(src []byte) (any, error)
+}
+
+// Parse lex's' the provided expression and returns an Expression to be used/applied to data.
+func Parse(expression []byte) (Expression, error) {
+	p := parser{
+		exp:       expression,
+		tokenizer: NewTokenizer(expression),
+	}
+
+	result, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		return nil, errors.New("no expression results found")
+	}
+	return result, nil
+}
+
+// Parser parses and returns a supplied expression
+type parser struct {
+	exp       []byte
+	tokenizer *Tokenizer
+}
+
+func (p *parser) parseExpression() (current Expression, err error) {
+
+	for {
+		token, err := p.tokenizer.Next()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return current, nil
+			}
+			return nil, err
+		}
+
+		if current == nil {
+			// look for nextToken value
+			current, err = p.parseValue(token)
+			if err != nil {
+				return nil, err
+			}
+
+		} else {
+			if token.kind == CloseParen {
+				return current, nil
+			}
+			// look for nextToken operation
+			current, err = p.parseOperation(token, current)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+}
+
+func (p *parser) parseValue(token Token) (Expression, error) {
+	switch token.kind {
+	case OpenBracket:
+		arr := make([]Expression, 0, 2)
+
+	FOR:
+		for {
+			token, err := p.tokenizer.Next()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil, errors.New("unclosed Array '['")
+				}
+				return nil, err
+			}
+
+			switch token.kind {
+			case CloseBracket:
+				break FOR
+			case Comma:
+				continue
+			default:
+				value, err := p.parseValue(token)
+				if err != nil {
+					return nil, err
+				}
+				arr = append(arr, value)
+			}
+			if token.kind == CloseBracket {
+				break
+			}
+		}
+
+		return array{vec: arr}, nil
+
+	case OpenParen:
+		expression, err := p.parseExpression()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("expression after open parenthesis '(' ends unexpectedly.")
+			}
+			return nil, err
+		}
+		return expression, nil
+
+	case SelectorPath:
+		start := int(token.start)
+		return selectorPath{
+			s: string(p.exp[start+1 : start+int(token.len)]),
+		}, nil
+
+	case QuotedString:
+		start := int(token.start)
+		return str{
+			s: string(p.exp[start+1 : start+int(token.len)-1]),
+		}, nil
+
+	case Number:
+		start := int(token.start)
+		f64, err := strconv.ParseFloat(string(p.exp[start:start+int(token.len)]), 64)
+		if err != nil {
+			return nil, err
+		}
+		return num{
+			n: f64,
+		}, nil
+
+	case BooleanTrue:
+		return boolean{b: true}, nil
+
+	case BooleanFalse:
+		return boolean{b: false}, nil
+
+	case Null:
+		return null{}, nil
+		// TODO: Add COERCE
+
+	case Not:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		value, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return not{value: value}, nil
+
+	default:
+		return nil, fmt.Errorf("token is not a valid value: %v", token)
+	}
+}
+
+func (p *parser) parseOperation(token Token, current Expression) (Expression, error) {
+	switch token.kind {
+	case Add:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return add{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Subtract:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return sub{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Multiply:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return multi{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Divide:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return div{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Equals:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return eq{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Gt:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return gt{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Gte:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return gte{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Lt:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return lt{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Lte:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return lte{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Or:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return or{
+			left:  current,
+			right: right,
+		}, nil
+
+	case And:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return and{
+			left:  current,
+			right: right,
+		}, nil
+
+	case StartsWith:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return startsWith{
+			left:  current,
+			right: right,
+		}, nil
+
+	case EndsWith:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return endsWith{
+			left:  current,
+			right: right,
+		}, nil
+
+	case In:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return in{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Contains:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return contains{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Not:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		value, err := p.parseOperation(nextToken, current)
+		if err != nil {
+			return nil, err
+		}
+		return not{
+			value: value,
+		}, nil
+
+	case CloseBracket:
+		return current, nil
+
+	default:
+		return nil, fmt.Errorf("invalid operation: %v", token)
+	}
+}
+
+func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error) {
+	token, err = p.tokenizer.Next()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			start := int(operationToken.start)
+			err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
+			return
+		}
+		return
+	}
+	return token, nil
+}
+
 //func parseValue(tokens []Token, pos *int) (Expression, error) {
 //	if *pos > len(tokens)-1 {
 //		return nil, nil
@@ -77,9 +423,9 @@ package ksql
 //	*pos += 1
 //
 //	switch tok.kind {
-//	case Identifier:
-//		return parseOp(ident{s: tok.value.(string)}, tokens, pos)
-//	case String:
+//	case SelectorPath:
+//		return parseOp(selectorPath{s: tok.value.(string)}, tokens, pos)
+//	case QuotedString:
 //		return parseOp(str{s: tok.value.(string)}, tokens, pos)
 //	case Number:
 //		return parseOp(num{n: tok.value.(float64)}, tokens, pos)
@@ -349,538 +695,539 @@ package ksql
 //	case CloseParen, CloseBracket, Comma:
 //		return value, nil
 //	default:
-//		return nil, fmt.Errorf("invalid token after ident %d %s", tok.kind, tok.value)
+//		return nil, fmt.Errorf("invalid token after selectorPath %d %s", tok.kind, tok.value)
 //	}
 //}
-//
-//var _ Expression = (*null)(nil)
-//
-//type null struct {
-//}
-//
-//func (bn null) Calculate(_ []byte) (any, error) {
-//	return nil, nil
-//}
-//
-//var _ Expression = (*boolean)(nil)
-//
-//type boolean struct {
-//	b bool
-//}
-//
-//func (b boolean) Calculate(_ []byte) (any, error) {
-//	return b.b, nil
-//}
-//
-//var _ Expression = (*num)(nil)
-//
-//type num struct {
-//	n float64
-//}
-//
-//func (n num) Calculate(_ []byte) (any, error) {
-//	return n.n, nil
-//}
-//
-//var _ Expression = (*str)(nil)
-//
-//type str struct {
-//	s string
-//}
-//
-//func (s str) Calculate(_ []byte) (any, error) {
-//	return s.s, nil
-//}
-//
-//var _ Expression = (*ident)(nil)
-//
-//type ident struct {
-//	s string
-//}
-//
-//func (i ident) Calculate(src []byte) (any, error) {
-//	return gjson.GetBytes(src, i.s).Value(), nil
-//}
-//
-//var _ Expression = (*add)(nil)
-//
-//type add struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (a add) Calculate(src []byte) (any, error) {
-//	left, err := a.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := a.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		if left != nil && right == nil {
-//			switch left.(type) {
-//			case string, float64:
-//				return left, nil
-//			}
-//		} else if right != nil && left == nil {
-//			switch right.(type) {
-//			case string, float64:
-//				return right, nil
-//			}
-//		}
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s + %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return l + right.(string), nil
-//	case float64:
-//		return l + right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s + %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*sub)(nil)
-//
-//type sub struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (s sub) Calculate(src []byte) (any, error) {
-//	left, err := s.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := s.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s - %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case float64:
-//		return l - right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s - %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*multi)(nil)
-//
-//type multi struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (m multi) Calculate(src []byte) (any, error) {
-//	left, err := m.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := m.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s * %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case float64:
-//		return l * right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s * %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*div)(nil)
-//
-//type div struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (d div) Calculate(src []byte) (any, error) {
-//	left, err := d.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := d.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s / %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case float64:
-//		return l / right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s / %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*eq)(nil)
-//
-//type eq struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (e eq) Calculate(src []byte) (any, error) {
-//	left, err := e.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := e.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	return reflect.DeepEqual(left, right), nil
-//}
-//
-//var _ Expression = (*gt)(nil)
-//
-//type gt struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (g gt) Calculate(src []byte) (any, error) {
-//	left, err := g.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := g.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s > %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return l > right.(string), nil
-//	case float64:
-//		return l > right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s > %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*gte)(nil)
-//
-//type gte struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (g gte) Calculate(src []byte) (any, error) {
-//	left, err := g.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := g.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s >= %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return l >= right.(string), nil
-//	case float64:
-//		return l >= right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s >= %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*lt)(nil)
-//
-//type lt struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (l lt) Calculate(src []byte) (any, error) {
-//	left, err := l.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := l.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return l < right.(string), nil
-//	case float64:
-//		return l < right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*lte)(nil)
-//
-//type lte struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (l lte) Calculate(src []byte) (any, error) {
-//	left, err := l.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := l.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s <= %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return l <= right.(string), nil
-//	case float64:
-//		return l <= right.(float64), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s <= %s", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*not)(nil)
-//
-//type not struct {
-//	value Expression
-//}
-//
-//func (n not) Calculate(src []byte) (any, error) {
-//	value, err := n.value.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	switch t := value.(type) {
-//	case bool:
-//		return !t, nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s for !", value)}
-//	}
-//}
-//
-//var _ Expression = (*or)(nil)
-//
-//type or struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (o or) Calculate(src []byte) (any, error) {
-//	left, err := o.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := o.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s || %s", left, right)}
-//	}
-//
-//	switch t := left.(type) {
-//	case bool:
-//		return t || right.(bool), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s || %s !", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*and)(nil)
-//
-//type and struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (a and) Calculate(src []byte) (any, error) {
-//	left, err := a.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := a.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s && %s", left, right)}
-//	}
-//
-//	switch t := left.(type) {
-//	case bool:
-//		return t && right.(bool), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s && %s !", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*contains)(nil)
-//
-//type contains struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (c contains) Calculate(src []byte) (any, error) {
-//	left, err := c.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := c.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return strings.Contains(l, right.(string)), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*startsWith)(nil)
-//
-//type startsWith struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (s startsWith) Calculate(src []byte) (any, error) {
-//	left, err := s.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := s.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s STARTSWITH %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return strings.HasPrefix(l, right.(string)), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s STARTSWITH %s !", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*endsWith)(nil)
-//
-//type endsWith struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (e endsWith) Calculate(src []byte) (any, error) {
-//	left, err := e.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := e.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if reflect.TypeOf(left) != reflect.TypeOf(right) {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s ENDSWITH %s", left, right)}
-//	}
-//
-//	switch l := left.(type) {
-//	case string:
-//		return strings.HasSuffix(l, right.(string)), nil
-//	default:
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s ENDSWITH %s !", left, right)}
-//	}
-//}
-//
-//var _ Expression = (*in)(nil)
-//
-//type in struct {
-//	left  Expression
-//	right Expression
-//}
-//
-//func (i in) Calculate(src []byte) (any, error) {
-//	left, err := i.left.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//	right, err := i.right.Calculate(src)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	arr, ok := right.([]any)
-//	if !ok {
-//		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s IN %s !", left, right)}
-//	}
-//	for _, v := range arr {
-//		if left == v {
-//			return true, nil
-//		}
-//	}
-//	return false, nil
-//}
-//
-//var _ Expression = (*array)(nil)
-//
-//type array struct {
-//	vec []Expression
-//}
-//
-//func (a array) Calculate(src []byte) (any, error) {
-//	arr := make([]any, 0, len(a.vec))
-//	for _, v := range a.vec {
-//		res, err := v.Calculate(src)
-//		if err != nil {
-//			return nil, err
-//		}
-//		arr = append(arr, res)
-//	}
-//	return arr, nil
-//}
+
+var _ Expression = (*null)(nil)
+
+type null struct {
+}
+
+func (bn null) Calculate(_ []byte) (any, error) {
+	return nil, nil
+}
+
+var _ Expression = (*boolean)(nil)
+
+type boolean struct {
+	b bool
+}
+
+func (b boolean) Calculate(_ []byte) (any, error) {
+	return b.b, nil
+}
+
+var _ Expression = (*num)(nil)
+
+type num struct {
+	n float64
+}
+
+func (n num) Calculate(_ []byte) (any, error) {
+	return n.n, nil
+}
+
+var _ Expression = (*str)(nil)
+
+type str struct {
+	s string
+}
+
+func (s str) Calculate(_ []byte) (any, error) {
+	return s.s, nil
+}
+
+var _ Expression = (*selectorPath)(nil)
+
+type selectorPath struct {
+	s string
+}
+
+func (i selectorPath) Calculate(src []byte) (any, error) {
+	return gjson.GetBytes(src, i.s).Value(), nil
+}
+
+var _ Expression = (*add)(nil)
+
+type add struct {
+	left  Expression
+	right Expression
+}
+
+func (a add) Calculate(src []byte) (any, error) {
+	left, err := a.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := a.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		if left != nil && right == nil {
+			switch left.(type) {
+			case string, float64:
+				return left, nil
+			}
+		} else if right != nil && left == nil {
+			switch right.(type) {
+			case string, float64:
+				return right, nil
+			}
+		}
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s + %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return l + right.(string), nil
+	case float64:
+		return l + right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s + %s", left, right)}
+	}
+}
+
+var _ Expression = (*sub)(nil)
+
+type sub struct {
+	left  Expression
+	right Expression
+}
+
+func (s sub) Calculate(src []byte) (any, error) {
+	left, err := s.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := s.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s - %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case float64:
+		return l - right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s - %s", left, right)}
+	}
+}
+
+var _ Expression = (*multi)(nil)
+
+type multi struct {
+	left  Expression
+	right Expression
+}
+
+func (m multi) Calculate(src []byte) (any, error) {
+	left, err := m.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := m.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s * %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case float64:
+		return l * right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s * %s", left, right)}
+	}
+}
+
+var _ Expression = (*div)(nil)
+
+type div struct {
+	left  Expression
+	right Expression
+}
+
+func (d div) Calculate(src []byte) (any, error) {
+	left, err := d.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := d.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s / %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case float64:
+		return l / right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s / %s", left, right)}
+	}
+}
+
+var _ Expression = (*eq)(nil)
+
+type eq struct {
+	left  Expression
+	right Expression
+}
+
+func (e eq) Calculate(src []byte) (any, error) {
+	left, err := e.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := e.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	return reflect.DeepEqual(left, right), nil
+}
+
+var _ Expression = (*gt)(nil)
+
+type gt struct {
+	left  Expression
+	right Expression
+}
+
+func (g gt) Calculate(src []byte) (any, error) {
+	left, err := g.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := g.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s > %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return l > right.(string), nil
+	case float64:
+		return l > right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s > %s", left, right)}
+	}
+}
+
+var _ Expression = (*gte)(nil)
+
+type gte struct {
+	left  Expression
+	right Expression
+}
+
+func (g gte) Calculate(src []byte) (any, error) {
+	left, err := g.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := g.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s >= %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return l >= right.(string), nil
+	case float64:
+		return l >= right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s >= %s", left, right)}
+	}
+}
+
+var _ Expression = (*lt)(nil)
+
+type lt struct {
+	left  Expression
+	right Expression
+}
+
+func (l lt) Calculate(src []byte) (any, error) {
+	left, err := l.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := l.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return l < right.(string), nil
+	case float64:
+		return l < right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
+	}
+}
+
+var _ Expression = (*lte)(nil)
+
+type lte struct {
+	left  Expression
+	right Expression
+}
+
+func (l lte) Calculate(src []byte) (any, error) {
+	left, err := l.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := l.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s <= %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return l <= right.(string), nil
+	case float64:
+		return l <= right.(float64), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s <= %s", left, right)}
+	}
+}
+
+var _ Expression = (*not)(nil)
+
+type not struct {
+	value Expression
+}
+
+func (n not) Calculate(src []byte) (any, error) {
+	value, err := n.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	switch t := value.(type) {
+	case bool:
+		return !t, nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s for !", value)}
+	}
+}
+
+var _ Expression = (*or)(nil)
+
+type or struct {
+	left  Expression
+	right Expression
+}
+
+func (o or) Calculate(src []byte) (any, error) {
+	left, err := o.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := o.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s || %s", left, right)}
+	}
+
+	switch t := left.(type) {
+	case bool:
+		return t || right.(bool), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s || %s !", left, right)}
+	}
+}
+
+var _ Expression = (*and)(nil)
+
+type and struct {
+	left  Expression
+	right Expression
+}
+
+func (a and) Calculate(src []byte) (any, error) {
+	left, err := a.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := a.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s && %s", left, right)}
+	}
+
+	switch t := left.(type) {
+	case bool:
+		return t && right.(bool), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s && %s !", left, right)}
+	}
+}
+
+var _ Expression = (*contains)(nil)
+
+type contains struct {
+	left  Expression
+	right Expression
+}
+
+func (c contains) Calculate(src []byte) (any, error) {
+	left, err := c.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := c.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		// TODO: Add support for any value inside of array
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return strings.Contains(l, right.(string)), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+	}
+}
+
+var _ Expression = (*startsWith)(nil)
+
+type startsWith struct {
+	left  Expression
+	right Expression
+}
+
+func (s startsWith) Calculate(src []byte) (any, error) {
+	left, err := s.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := s.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s STARTSWITH %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return strings.HasPrefix(l, right.(string)), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s STARTSWITH %s !", left, right)}
+	}
+}
+
+var _ Expression = (*endsWith)(nil)
+
+type endsWith struct {
+	left  Expression
+	right Expression
+}
+
+func (e endsWith) Calculate(src []byte) (any, error) {
+	left, err := e.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := e.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s ENDSWITH %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		return strings.HasSuffix(l, right.(string)), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s ENDSWITH %s !", left, right)}
+	}
+}
+
+var _ Expression = (*in)(nil)
+
+type in struct {
+	left  Expression
+	right Expression
+}
+
+func (i in) Calculate(src []byte) (any, error) {
+	left, err := i.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := i.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	arr, ok := right.([]any)
+	if !ok {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s IN %s !", left, right)}
+	}
+	for _, v := range arr {
+		if left == v {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+var _ Expression = (*array)(nil)
+
+type array struct {
+	vec []Expression
+}
+
+func (a array) Calculate(src []byte) (any, error) {
+	arr := make([]any, 0, len(a.vec))
+	for _, v := range a.vec {
+		res, err := v.Calculate(src)
+		if err != nil {
+			return nil, err
+		}
+		arr = append(arr, res)
+	}
+	return arr, nil
+}

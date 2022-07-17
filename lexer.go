@@ -21,8 +21,8 @@ type LexerResult struct {
 type TokenKind uint8
 
 const (
-	Identifier = iota
-	String
+	SelectorPath = iota
+	QuotedString
 	Number
 	BooleanTrue
 	BooleanFalse
@@ -227,7 +227,7 @@ func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 			end += 1
 		}
 		result = LexerResult{
-			kind: Identifier,
+			kind: SelectorPath,
 			len:  end,
 		}
 	} else {
@@ -259,7 +259,7 @@ func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 	if end > 0 {
 		if endedWithTerminator {
 			result = LexerResult{
-				kind: String,
+				kind: QuotedString,
 				len:  end + 2,
 			}
 
@@ -271,7 +271,7 @@ func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 			err = ErrUnterminatedString{s: string(data)}
 		} else {
 			result = LexerResult{
-				kind: String,
+				kind: QuotedString,
 				len:  2,
 			}
 		}
