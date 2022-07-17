@@ -24,13 +24,13 @@ func (e ErrUnterminatedString) Error() string {
 	return fmt.Sprintf("Unterminated string `%s`", e.s)
 }
 
-// ErrInvalidIdentifier represents an invalid identifier string
-type ErrInvalidIdentifier struct {
+// ErrInvalidSelectorPath represents an invalid selector string
+type ErrInvalidSelectorPath struct {
 	s string
 }
 
-func (e ErrInvalidIdentifier) Error() string {
-	return fmt.Sprintf("Invalid identifier `%s`", e.s)
+func (e ErrInvalidSelectorPath) Error() string {
+	return fmt.Sprintf("Invalid selector path `%s`", e.s)
 }
 
 // ErrInvalidBool represents an invalid boolean
@@ -69,4 +69,22 @@ type ErrUnsupportedTypeComparison struct {
 
 func (e ErrUnsupportedTypeComparison) Error() string {
 	return fmt.Sprintf("unsupported type comparison: `%s`", e.s)
+}
+
+// ErrInvalidIdentifier represents an invalid identifier
+type ErrInvalidIdentifier struct {
+	s string
+}
+
+func (e ErrInvalidIdentifier) Error() string {
+	return fmt.Sprintf("Invalid identifier `%s`", e.s)
+}
+
+// ErrUnsupportedCoerce represents a comparison of incompatible types type casts
+type ErrUnsupportedCoerce struct {
+	s string
+}
+
+func (e ErrUnsupportedCoerce) Error() string {
+	return fmt.Sprintf("unsupported type comparison for COERCE: `%s`", e.s)
 }

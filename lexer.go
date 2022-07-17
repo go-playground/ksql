@@ -48,6 +48,8 @@ const (
 	Comma
 	OpenParen
 	CloseParen
+	Coerce
+	Identifier
 )
 
 /// Try to lex a single token from the input stream.
@@ -97,7 +99,7 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 	case '"', '\'':
 		result, err = tokenizeString(data, b)
 	case '.':
-		result, err = tokenizeIdentifier(data)
+		result, err = tokenizeSelectorPath(data)
 	case 't', 'f':
 		result, err = tokenizeBool(data)
 	case '&':
@@ -113,7 +115,15 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 			err = ErrUnsupportedCharacter{b: b}
 		}
 	case 'C':
-		result, err = tokenizeKeyword(data, "CONTAINS", Contains)
+
+		if len(data) > 2 && data[1] == 'O' && data[2] == 'N' {
+			result, err = tokenizeKeyword(data, "CONTAINS", Contains)
+		} else if len(data) > 2 && data[1] == 'O' && data[2] == 'E' {
+			result, err = tokenizeKeyword(data, "COERCE", Coerce)
+		} else {
+			err = ErrUnsupportedCharacter{b: b}
+		}
+
 	case 'I':
 		result, err = tokenizeKeyword(data, "IN", In)
 	case 'S':
@@ -122,6 +132,8 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 		result, err = tokenizeKeyword(data, "ENDSWITH", EndsWith)
 	case 'N':
 		result, err = tokenizeNull(data)
+	case '_':
+		result, err = tokenizeIdentifier(data)
 	default:
 		if isDigit(b) {
 			result, err = tokenizeNumber(data)
@@ -130,6 +142,22 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 		}
 	}
 
+	return
+}
+
+func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
+	end := takeWhile(data, func(b byte) bool {
+		return !isWhitespace(b) && b != ')' && b != ']'
+	})
+	// identifier must start and end with underscore
+	if end > 0 && data[end-1] == '_' {
+		result = LexerResult{
+			kind: Identifier,
+			len:  end,
+		}
+	} else {
+		err = ErrInvalidIdentifier{s: string(data)}
+	}
 	return
 }
 
@@ -218,7 +246,7 @@ func tokenizeBool(data []byte) (result LexerResult, err error) {
 	return
 }
 
-func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
+func tokenizeSelectorPath(data []byte) (result LexerResult, err error) {
 	end := takeWhile(data[1:], func(b byte) bool {
 		return !isWhitespace(b) && b != ')' && b != ']'
 	})
@@ -231,7 +259,7 @@ func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 			len:  end,
 		}
 	} else {
-		err = ErrInvalidIdentifier{s: string(data)}
+		err = ErrInvalidSelectorPath{s: string(data)}
 	}
 	return
 }

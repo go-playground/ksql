@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/araddon/dateparse"
 	"github.com/tidwall/gjson"
 )
 
@@ -151,7 +152,54 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 
 	case Null:
 		return null{}, nil
-		// TODO: Add COERCE
+
+	case Coerce:
+		// COERCE <expression> _<datatype>_
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		var constEligible bool
+		switch nextToken.kind {
+		case QuotedString, Number, BooleanTrue, BooleanFalse, Null:
+			constEligible = true
+		}
+
+		value, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+
+		identifierToken, err := p.tokenizer.Next()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("no identifier after value for: COERCE")
+			}
+			return nil, err
+		}
+
+		start := int(identifierToken.start)
+		identifier := string(p.exp[start : start+int(identifierToken.len)])
+
+		if identifierToken.kind != Identifier {
+			return nil, fmt.Errorf("COERCE missing data type identifier, found instead: %s", identifier)
+		}
+
+		switch identifier {
+		case "_datetime_":
+			expression := coerceDateTime{value: value}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return nil, err
+				}
+				return coercedConstant{value: value}, nil
+			} else {
+				return expression, nil
+			}
+		default:
+			return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
+		}
 
 	case Not:
 		nextToken, err := p.nextOperatorToken(token)
@@ -413,6 +461,42 @@ func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error
 		return
 	}
 	return token, nil
+}
+
+var _ Expression = (*coerceDateTime)(nil)
+
+type coerceDateTime struct {
+	value Expression
+}
+
+func (c coerceDateTime) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		t, err := dateparse.ParseAny(v)
+		if err != nil {
+			// don't return error at runtime but null same as not found
+			// which will fail equality checks and alike which is the desired behaviour.
+			return nil, nil
+		}
+		return t, nil
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a DateTime", value)}
+	}
+}
+
+var _ Expression = (*coercedConstant)(nil)
+
+type coercedConstant struct {
+	value any
+}
+
+func (c coercedConstant) Calculate(_ []byte) (any, error) {
+	return c.value, nil
 }
 
 var _ Expression = (*null)(nil)

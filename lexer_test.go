@@ -100,7 +100,7 @@ func Test(t *testing.T) {
 		{
 			name:  "parse identifier blank",
 			input: ".",
-			err:   ErrInvalidIdentifier{s: "."},
+			err:   ErrInvalidSelectorPath{s: "."},
 		},
 		{
 			name:   "parse equals",
@@ -277,6 +277,30 @@ func Test(t *testing.T) {
 			name:   "parse not",
 			input:  "!",
 			tokens: []Token{{kind: Not, start: 0, len: 1}},
+		},
+		{
+			name:  "parse bad identifier",
+			input: "_datetime",
+			err:   ErrInvalidIdentifier{s: "_datetime"},
+		},
+		{
+			name:   "parse identifier",
+			input:  "_datetime_",
+			tokens: []Token{{kind: Identifier, start: 0, len: 10}},
+		},
+		{
+			name:   "parse COERCE",
+			input:  "COERCE ",
+			tokens: []Token{{kind: Coerce, start: 0, len: 6}},
+		},
+		{
+			name:  "parse COERCE",
+			input: `COERCE "2022-01-02" _datetime_`,
+			tokens: []Token{
+				{kind: Coerce, start: 0, len: 6},
+				{kind: QuotedString, start: 7, len: 12},
+				{kind: Identifier, start: 20, len: 10},
+			},
 		},
 	}
 

@@ -36,6 +36,18 @@ func BenchmarkParenNot(b *testing.B) {
 	bench(b, `!(.f1 != .f2)`, `{"f1":true,"f2":false}`)
 }
 
+func BenchmarkCoerceDateTimeSelector(b *testing.B) {
+	bench(b, `COERCE .dt1 _datetime_ == COERCE .dt2 _datetime_`, `{"dt1":"2022-01-02","dt2":"2022-01-02"}`)
+}
+
+func BenchmarkCoerceDateTimeSelectorMixed(b *testing.B) {
+	bench(b, `COERCE .dt1 _datetime_ == COERCE "2022-01-02" _datetime_`, `{"dt1":"2022-01-02"}`)
+}
+
+func BenchmarkCoerceDateTimeSelectorConstant(b *testing.B) {
+	bench(b, `COERCE "2022-01-02" _datetime_ == COERCE "2022-01-02" _datetime_`, ``)
+}
+
 func bench(b *testing.B, expression, input string) {
 	ex, err := Parse([]byte(expression))
 	if err != nil {

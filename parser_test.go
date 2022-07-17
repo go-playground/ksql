@@ -2,6 +2,7 @@ package ksql
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -293,6 +294,48 @@ func TestParser(t *testing.T) {
 			name:     "company ! paren selectorPath &&",
 			exp:      `!(.f1 && .f2)`,
 			src:      `{"f1":true,"f2":false}`,
+			expected: true,
+		},
+		{
+			name:     "COERCE DateTime",
+			exp:      `COERCE .name _datetime_`,
+			src:      `{"name":"2022-01-02"}`,
+			expected: time.Date(2022, 01, 02, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:     "COERCE DateTime equality",
+			exp:      `COERCE .dt1 _datetime_ == COERCE .dt2 _datetime_`,
+			src:      `{"dt1":"2022-01-02","dt2":"2022-01-02"}`,
+			expected: true,
+		},
+		{
+			name:     "COERCE DateTime equality mixed",
+			exp:      `COERCE .dt1 _datetime_ == COERCE "2022-07-14T17:50:08.318426001Z" _datetime_`,
+			src:      `{"dt1":"2022-07-14T17:50:08.318426000Z"}`,
+			expected: false,
+		},
+		{
+			name:     "COERCE DateTime equality and eq",
+			exp:      `COERCE .dt1 _datetime_ == COERCE .dt2 _datetime_ && true == true`,
+			src:      `{"dt1":"2022-07-14T17:50:08.318426000Z","dt2":"2022-07-14T17:50:08.318426001Z"}`,
+			expected: false,
+		},
+		{
+			name:     "COERCE DateTime equality and eq with parenthesis'",
+			exp:      `(COERCE .dt1 _datetime_ == COERCE .dt2 _datetime_) && true == true`,
+			src:      `{"dt1":"2022-07-14T17:50:08.318426000Z","dt2":"2022-07-14T17:50:08.318426001Z"}`,
+			expected: false,
+		},
+		{
+			name:     "COERCE DateTime equality and eq with parenthesis' 2",
+			exp:      `(COERCE .dt1 _datetime_) == (COERCE .dt2 _datetime_) && true == true`,
+			src:      `{"dt1":"2022-07-14T17:50:08.318426000Z","dt2":"2022-07-14T17:50:08.318426001Z"}`,
+			expected: false,
+		},
+		{
+			name:     "COERCE DateTime equality constants",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ == COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
 			expected: true,
 		},
 	}
