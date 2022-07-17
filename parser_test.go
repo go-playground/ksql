@@ -280,7 +280,7 @@ func TestParser(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "company ! paran selectorPath &&",
+			name:     "company ! paren selectorPath &&",
 			exp:      `!(.f1 && .f2)`,
 			src:      `{"f1":true,"f2":false}`,
 			expected: true,

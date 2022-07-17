@@ -42,7 +42,6 @@ func bench(b *testing.B, expression, input string) {
 		b.Fatal(err)
 	}
 	in := []byte(input)
-	b.ResetTimer()
 	b.SetBytes(int64(len(in)))
 
 	for i := 0; i < b.N; i++ {
