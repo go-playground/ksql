@@ -1,6 +1,8 @@
 package ksql
 
 import (
+	"errors"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -18,12 +20,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse double quote string",
 			input:  "\"quoted\"",
-			tokens: []Token{{kind: String, value: "quoted"}},
+			tokens: []Token{{kind: String, start: 0, len: 8}},
 		},
 		{
 			name:   "parse double quote string blank",
 			input:  "\"\"",
-			tokens: []Token{{kind: String, value: ""}},
+			tokens: []Token{{kind: String, start: 0, len: 2}},
 		},
 		{
 			name:  "parse double quote string unterminated",
@@ -38,12 +40,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse single quote string",
 			input:  "'quoted'",
-			tokens: []Token{{kind: String, value: "quoted"}},
+			tokens: []Token{{kind: String, start: 0, len: 8}},
 		},
 		{
 			name:   "parse single quote string blank",
 			input:  "''",
-			tokens: []Token{{kind: String, value: ""}},
+			tokens: []Token{{kind: String, start: 0, len: 2}},
 		},
 		{
 			name:  "parse single quote string unterminated",
@@ -58,12 +60,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse bool true",
 			input:  "true",
-			tokens: []Token{{kind: Boolean, value: true}},
+			tokens: []Token{{kind: BooleanTrue, start: 0, len: 4}},
 		},
 		{
 			name:   "parse bool false",
 			input:  "false",
-			tokens: []Token{{kind: Boolean, value: false}},
+			tokens: []Token{{kind: BooleanFalse, start: 0, len: 5}},
 		},
 		{
 			name:  "parse invalid bool",
@@ -73,17 +75,17 @@ func Test(t *testing.T) {
 		{
 			name:   "parse number float",
 			input:  "123.23",
-			tokens: []Token{{kind: Number, value: 123.23}},
+			tokens: []Token{{kind: Number, start: 0, len: 6}},
 		},
 		{
 			name:   "parse number exp",
 			input:  "1e-10",
-			tokens: []Token{{kind: Number, value: 1e-10}},
+			tokens: []Token{{kind: Number, len: 5}},
 		},
 		{
 			name:   "parse number int",
 			input:  "123",
-			tokens: []Token{{kind: Number, value: float64(123)}},
+			tokens: []Token{{kind: Number, len: 3}},
 		},
 		{
 			name:  "parse number invalid",
@@ -93,7 +95,7 @@ func Test(t *testing.T) {
 		{
 			name:   "parse identifier",
 			input:  ".properties.first_name",
-			tokens: []Token{{kind: Identifier, value: "properties.first_name"}},
+			tokens: []Token{{kind: Identifier, len: 22}},
 		},
 		{
 			name:  "parse identifier blank",
@@ -103,122 +105,138 @@ func Test(t *testing.T) {
 		{
 			name:   "parse equals",
 			input:  "==",
-			tokens: []Token{{kind: Equals}},
+			tokens: []Token{{kind: Equals, len: 2}},
 		},
 		{
 			name:   "parse add",
 			input:  "+",
-			tokens: []Token{{kind: Add}},
+			tokens: []Token{{kind: Add, len: 1}},
 		},
 		{
 			name:   "parse Substract",
 			input:  "-",
-			tokens: []Token{{kind: Subtract}},
+			tokens: []Token{{kind: Subtract, len: 1}},
 		},
 		{
 			name:   "parse multiply",
 			input:  "*",
-			tokens: []Token{{kind: Multiply}},
+			tokens: []Token{{kind: Multiply, len: 1}},
 		},
 		{
 			name:   "parse divide",
 			input:  "/",
-			tokens: []Token{{kind: Divide}},
+			tokens: []Token{{kind: Divide, len: 1}},
 		},
 		{
 			name:   "parse gt",
 			input:  ">",
-			tokens: []Token{{kind: Gt}},
+			tokens: []Token{{kind: Gt, len: 1}},
 		},
 		{
 			name:   "parse gte",
 			input:  ">=",
-			tokens: []Token{{kind: Gte}},
+			tokens: []Token{{kind: Gte, len: 2}},
 		},
 		{
 			name:   "parse lt",
 			input:  "<",
-			tokens: []Token{{kind: Lt}},
+			tokens: []Token{{kind: Lt, len: 1}},
 		},
 		{
 			name:   "parse lte",
 			input:  "<=",
-			tokens: []Token{{kind: Lte}},
+			tokens: []Token{{kind: Lte, len: 2}},
 		},
 		{
 			name:   "parse open paren",
 			input:  "(",
-			tokens: []Token{{kind: OpenParen}},
+			tokens: []Token{{kind: OpenParen, len: 1}},
 		},
 		{
 			name:   "parse close paren",
 			input:  ")",
-			tokens: []Token{{kind: CloseParen}},
+			tokens: []Token{{kind: CloseParen, len: 1}},
 		},
 		{
 			name:   "parse open bracket",
 			input:  "[",
-			tokens: []Token{{kind: OpenBracket}},
+			tokens: []Token{{kind: OpenBracket, len: 1}},
 		},
 		{
 			name:   "parse close bracket",
 			input:  "]",
-			tokens: []Token{{kind: CloseBracket}},
+			tokens: []Token{{kind: CloseBracket, len: 1}},
 		},
 		{
 			name:   "parse comma",
 			input:  ",",
-			tokens: []Token{{kind: Comma}},
+			tokens: []Token{{kind: Comma, len: 1}},
 		},
 		{
-			name:   "parse add ident",
-			input:  ".field1 + .field2",
-			tokens: []Token{{kind: Identifier, value: "field1"}, {kind: Add}, {kind: Identifier, value: "field2"}},
+			name:  "parse add ident",
+			input: ".field1 + .field2",
+			tokens: []Token{
+				{kind: Identifier, len: 7},
+				{kind: Add, start: 8, len: 1},
+				{kind: Identifier, start: 10, len: 7},
+			},
 		},
 		{
-			name:   "parse sub ident",
-			input:  ".field1 - .field2",
-			tokens: []Token{{kind: Identifier, value: "field1"}, {kind: Subtract}, {kind: Identifier, value: "field2"}},
+			name:  "parse sub ident",
+			input: ".field1 - .field2",
+			tokens: []Token{
+				{kind: Identifier, len: 7},
+				{kind: Subtract, start: 8, len: 1},
+				{kind: Identifier, start: 10, len: 7},
+			},
 		},
 		{
-			name:   "parse brackets",
-			input:  ".field1 - ( .field2 + .field3 )",
-			tokens: []Token{{kind: Identifier, value: "field1"}, {kind: Subtract}, {kind: OpenParen}, {kind: Identifier, value: "field2"}, {kind: Add}, {kind: Identifier, value: "field3"}, {kind: CloseParen}},
+			name:  "parse brackets",
+			input: ".field1 - ( .field2 + .field3 )",
+			tokens: []Token{
+				{kind: Identifier, len: 7},
+				{kind: Subtract, start: 8, len: 1},
+				{kind: OpenParen, start: 10, len: 1},
+				{kind: Identifier, start: 12, len: 7},
+				{kind: Add, start: 20, len: 1},
+				{kind: Identifier, start: 22, len: 7},
+				{kind: CloseParen, start: 30, len: 1},
+			},
 		},
 		{
 			name:   "parse or",
 			input:  "||",
-			tokens: []Token{{kind: Or}},
+			tokens: []Token{{kind: Or, len: 2}},
 		},
 		{
 			name:   "parse in",
 			input:  " IN ",
-			tokens: []Token{{kind: In}},
+			tokens: []Token{{kind: In, start: 1, len: 2}},
 		},
 		{
 			name:   "parse contains",
 			input:  " CONTAINS ",
-			tokens: []Token{{kind: Contains}},
+			tokens: []Token{{kind: Contains, start: 1, len: 8}},
 		},
 		{
 			name:   "parse STARTSWITH",
 			input:  " STARTSWITH ",
-			tokens: []Token{{kind: StartsWith}},
+			tokens: []Token{{kind: StartsWith, start: 1, len: 10}},
 		},
 		{
 			name:   "parse ENDSWITH",
 			input:  " ENDSWITH ",
-			tokens: []Token{{kind: EndsWith}},
+			tokens: []Token{{kind: EndsWith, start: 1, len: 8}},
 		},
 		{
 			name:   "parse AND",
 			input:  "&&",
-			tokens: []Token{{kind: And}},
+			tokens: []Token{{kind: And, start: 0, len: 2}},
 		},
 		{
 			name:   "parse NULL",
 			input:  "NULL",
-			tokens: []Token{{kind: Null}},
+			tokens: []Token{{kind: Null, start: 0, len: 4}},
 		},
 		{
 			name:  "parse bad or",
@@ -258,7 +276,7 @@ func Test(t *testing.T) {
 		{
 			name:   "parse not",
 			input:  "!",
-			tokens: []Token{{kind: Not}},
+			tokens: []Token{{kind: Not, start: 0, len: 1}},
 		},
 	}
 
@@ -267,7 +285,7 @@ func Test(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tokens, err := Tokenize([]byte(tc.input))
+			tokens, err := collect([]byte(tc.input))
 			if tc.err != nil {
 				assert.Error(err)
 				return
@@ -275,5 +293,21 @@ func Test(t *testing.T) {
 			assert.NoError(err)
 			assert.Equal(tc.tokens, tokens)
 		})
+	}
+}
+
+// Collect tokenizes the input and returns tokens or error lexing them.
+func collect(src []byte) (tokens []Token, err error) {
+	tokenizer := NewTokenizer(src)
+
+	for {
+		token, err := tokenizer.Next()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return tokens, nil
+			}
+			return tokens, err
+		}
+		tokens = append(tokens, token)
 	}
 }
