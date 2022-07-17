@@ -151,13 +151,23 @@ func TestParser(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "contains false",
+			name:     "contains substr",
 			exp:      `"team" CONTAINS "i"`,
 			expected: false,
 		},
 		{
-			name:     "contains true",
+			name:     "contains substr2",
 			exp:      `"team" CONTAINS "ea"`,
+			expected: true,
+		},
+		{
+			name:     "array contains string",
+			exp:      `["ea"] CONTAINS "ea"`,
+			expected: true,
+		},
+		{
+			name:     "array contains array",
+			exp:      `["a",["b","a"]] CONTAINS ["b","a"]`,
 			expected: true,
 		},
 		{
