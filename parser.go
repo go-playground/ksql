@@ -3,9 +3,12 @@ package ksql
 import (
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
+	"strconv"
 	"strings"
 
+	"github.com/araddon/dateparse"
 	"github.com/tidwall/gjson"
 )
 
@@ -22,13 +25,12 @@ type Expression interface {
 
 // Parse lex's' the provided expression and returns an Expression to be used/applied to data.
 func Parse(expression []byte) (Expression, error) {
-	tokens, err := Tokenize(expression)
-	if err != nil {
-		return nil, err
+	p := parser{
+		exp:       expression,
+		tokenizer: NewTokenizer(expression),
 	}
 
-	pos := new(int)
-	result, err := parseValue(tokens, pos)
+	result, err := p.parseExpression()
 	if err != nil {
 		return nil, err
 	}
@@ -39,288 +41,490 @@ func Parse(expression []byte) (Expression, error) {
 	return result, nil
 }
 
-func parseValue(tokens []Token, pos *int) (Expression, error) {
-	if *pos > len(tokens)-1 {
-		return nil, nil
-	}
-	tok := tokens[*pos]
-	*pos += 1
+// Parser parses and returns a supplied expression
+type parser struct {
+	exp       []byte
+	tokenizer *Tokenizer
+}
 
-	switch tok.kind {
-	case Identifier:
-		return parseOp(ident{s: tok.value.(string)}, tokens, pos)
-	case String:
-		return parseOp(str{s: tok.value.(string)}, tokens, pos)
-	case Number:
-		return parseOp(num{n: tok.value.(float64)}, tokens, pos)
-	case Boolean:
-		return parseOp(boolean{b: tok.value.(bool)}, tokens, pos)
-	case Null:
-		return parseOp(null{}, tokens, pos)
-	case Not:
-		v, err := parseValue(tokens, pos)
+func (p *parser) parseExpression() (current Expression, err error) {
+
+	for {
+		token, err := p.tokenizer.Next()
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return current, nil
+			}
 			return nil, err
 		}
-		if v == nil {
-			return nil, errors.New("no identifier after !")
-		}
-		return parseOp(not{value: v}, tokens, pos)
-	case OpenBracket:
-		var arr []Expression
-		for {
-			v, err := parseValue(tokens, pos)
+
+		if current == nil {
+			// look for nextToken value
+			current, err = p.parseValue(token)
 			if err != nil {
 				return nil, err
 			}
-			if v == nil {
-				break
+
+		} else {
+			if token.kind == CloseParen {
+				return current, nil
 			}
-			arr = append(arr, v)
+			// look for nextToken operation
+			current, err = p.parseOperation(token, current)
+			if err != nil {
+				return nil, err
+			}
 		}
-		return parseOp(array{
-			vec: arr,
-		}, tokens, pos)
-	case Comma:
-		v, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if v == nil {
-			return nil, fmt.Errorf("value required after comma: %s", tok.value)
-		}
-		return v, nil
-	case OpenParen:
-		v, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if v == nil {
-			return nil, errors.New("no value between ()")
-		}
-		return parseOp(v, tokens, pos)
-	case CloseParen:
-		return nil, errors.New("no value between ()")
-	case CloseBracket:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("invalid value %d %s", tok, tok.value)
 	}
 }
 
-func parseOp(value Expression, tokens []Token, pos *int) (Expression, error) {
-	if *pos > len(tokens)-1 {
-		return value, nil
-	}
-	tok := tokens[*pos]
-	*pos += 1
+func (p *parser) parseValue(token Token) (Expression, error) {
+	switch token.kind {
+	case OpenBracket:
+		arr := make([]Expression, 0, 2)
 
-	switch tok.kind {
-	case In:
-		right, err := parseValue(tokens, pos)
+	FOR:
+		for {
+			token, err := p.tokenizer.Next()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return nil, errors.New("unclosed Array '['")
+				}
+				return nil, err
+			}
+
+			switch token.kind {
+			case CloseBracket:
+				break FOR
+			case Comma:
+				continue
+			default:
+				value, err := p.parseValue(token)
+				if err != nil {
+					return nil, err
+				}
+				arr = append(arr, value)
+			}
+			if token.kind == CloseBracket {
+				break
+			}
+		}
+
+		return array{vec: arr}, nil
+
+	case OpenParen:
+		expression, err := p.parseExpression()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("expression after open parenthesis '(' ends unexpectedly.")
+			}
+			return nil, err
+		}
+		return expression, nil
+
+	case SelectorPath:
+		start := int(token.start)
+		return selectorPath{
+			s: string(p.exp[start+1 : start+int(token.len)]),
+		}, nil
+
+	case QuotedString:
+		start := int(token.start)
+		return str{
+			s: string(p.exp[start+1 : start+int(token.len)-1]),
+		}, nil
+
+	case Number:
+		start := int(token.start)
+		f64, err := strconv.ParseFloat(string(p.exp[start:start+int(token.len)]), 64)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after IN")
-		}
-		return in{
-			left:  value,
-			right: right,
+		return num{
+			n: f64,
 		}, nil
-	case Contains:
-		right, err := parseValue(tokens, pos)
+
+	case BooleanTrue:
+		return boolean{b: true}, nil
+
+	case BooleanFalse:
+		return boolean{b: false}, nil
+
+	case Null:
+		return null{}, nil
+
+	case Coerce:
+		// COERCE <expression> _<datatype>_
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after CONTAINS")
+		var constEligible bool
+		switch nextToken.kind {
+		case QuotedString, Number, BooleanTrue, BooleanFalse, Null:
+			constEligible = true
 		}
-		return contains{
-			left:  value,
-			right: right,
-		}, nil
-	case StartsWith:
-		right, err := parseValue(tokens, pos)
+
+		value, err := p.parseValue(nextToken)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after STARTSWITH")
+
+		identifierToken, err := p.tokenizer.Next()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("no identifier after value for: COERCE")
+			}
+			return nil, err
 		}
-		return startsWith{
-			left:  value,
-			right: right,
-		}, nil
-	case EndsWith:
-		right, err := parseValue(tokens, pos)
+
+		start := int(identifierToken.start)
+		identifier := string(p.exp[start : start+int(identifierToken.len)])
+
+		if identifierToken.kind != Identifier {
+			return nil, fmt.Errorf("COERCE missing data type identifier, found instead: %s", identifier)
+		}
+
+		switch identifier {
+		case "_datetime_":
+			expression := coerceDateTime{value: value}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return nil, err
+				}
+				return coercedConstant{value: value}, nil
+			} else {
+				return expression, nil
+			}
+		default:
+			return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
+		}
+
+	case Not:
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after ENDSWITH")
-		}
-		return endsWith{
-			left:  value,
-			right: right,
-		}, nil
-	case And:
-		right, err := parseValue(tokens, pos)
+		value, err := p.parseValue(nextToken)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after AND")
-		}
-		return and{
-			left:  value,
-			right: right,
-		}, nil
-	case Or:
-		right, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if right == nil {
-			return nil, errors.New("no value after OR")
-		}
-		return or{
-			left:  value,
-			right: right,
-		}, nil
-	case Gt:
-		right, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if right == nil {
-			return nil, errors.New("no value after >")
-		}
-		return gt{
-			left:  value,
-			right: right,
-		}, nil
-	case Gte:
-		right, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if right == nil {
-			return nil, errors.New("no value after >=")
-		}
-		return gte{
-			left:  value,
-			right: right,
-		}, nil
-	case Lt:
-		right, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if right == nil {
-			return nil, errors.New("no value after <")
-		}
-		return lt{
-			left:  value,
-			right: right,
-		}, nil
-	case Lte:
-		right, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if right == nil {
-			return nil, errors.New("no value after <=")
-		}
-		return lte{
-			left:  value,
-			right: right,
-		}, nil
-	case Equals:
-		right, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if right == nil {
-			return nil, errors.New("no value after ==")
-		}
-		return eq{
-			left:  value,
-			right: right,
-		}, nil
+		return not{value: value}, nil
+
+	default:
+		return nil, fmt.Errorf("token is not a valid value: %v", token)
+	}
+}
+
+func (p *parser) parseOperation(token Token, current Expression) (Expression, error) {
+	switch token.kind {
 	case Add:
-		right, err := parseValue(tokens, pos)
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after +")
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
 		}
 		return add{
-			left:  value,
+			left:  current,
 			right: right,
 		}, nil
+
 	case Subtract:
-		right, err := parseValue(tokens, pos)
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after -")
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
 		}
 		return sub{
-			left:  value,
+			left:  current,
 			right: right,
 		}, nil
+
 	case Multiply:
-		right, err := parseValue(tokens, pos)
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after *")
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
 		}
 		return multi{
-			left:  value,
+			left:  current,
 			right: right,
 		}, nil
+
 	case Divide:
-		right, err := parseValue(tokens, pos)
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if right == nil {
-			return nil, errors.New("no value after /")
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
 		}
 		return div{
-			left:  value,
+			left:  current,
 			right: right,
 		}, nil
-	case Not:
-		op, err := parseOp(value, tokens, pos)
+
+	case Equals:
+		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
 			return nil, err
 		}
-		if op == nil {
-			return nil, errors.New("no operator after !")
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return eq{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Gt:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return gt{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Gte:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return gte{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Lt:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return lt{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Lte:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return lte{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Or:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return or{
+			left:  current,
+			right: right,
+		}, nil
+
+	case And:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return and{
+			left:  current,
+			right: right,
+		}, nil
+
+	case StartsWith:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return startsWith{
+			left:  current,
+			right: right,
+		}, nil
+
+	case EndsWith:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return endsWith{
+			left:  current,
+			right: right,
+		}, nil
+
+	case In:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return in{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Contains:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return contains{
+			left:  current,
+			right: right,
+		}, nil
+
+	case ContainsAny:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return containsAny{
+			left:  current,
+			right: right,
+		}, nil
+
+	case ContainsAll:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return containsAll{
+			left:  current,
+			right: right,
+		}, nil
+
+	case Not:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		value, err := p.parseOperation(nextToken, current)
+		if err != nil {
+			return nil, err
 		}
 		return not{
-			value: op,
+			value: value,
 		}, nil
-	case OpenParen:
-		op, err := parseValue(tokens, pos)
-		if err != nil {
-			return nil, err
-		}
-		if op == nil {
-			return nil, errors.New("no value between ()")
-		}
-		return parseOp(op, tokens, pos)
-	case CloseParen, CloseBracket, Comma:
-		return value, nil
+
+	case CloseBracket:
+		return current, nil
+
 	default:
-		return nil, fmt.Errorf("invalid token after ident %d %s", tok.kind, tok.value)
+		return nil, fmt.Errorf("invalid operation: %v", token)
 	}
+}
+
+func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error) {
+	token, err = p.tokenizer.Next()
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			start := int(operationToken.start)
+			err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
+			return
+		}
+		return
+	}
+	return token, nil
+}
+
+var _ Expression = (*coerceDateTime)(nil)
+
+type coerceDateTime struct {
+	value Expression
+}
+
+func (c coerceDateTime) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		t, err := dateparse.ParseAny(v)
+		if err != nil {
+			// don't return error at runtime but null same as not found
+			// which will fail equality checks and alike which is the desired behaviour.
+			return nil, nil
+		}
+		return t, nil
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a DateTime", value)}
+	}
+}
+
+var _ Expression = (*coercedConstant)(nil)
+
+type coercedConstant struct {
+	value any
+}
+
+func (c coercedConstant) Calculate(_ []byte) (any, error) {
+	return c.value, nil
 }
 
 var _ Expression = (*null)(nil)
@@ -362,13 +566,13 @@ func (s str) Calculate(_ []byte) (any, error) {
 	return s.s, nil
 }
 
-var _ Expression = (*ident)(nil)
+var _ Expression = (*selectorPath)(nil)
 
-type ident struct {
+type selectorPath struct {
 	s string
 }
 
-func (i ident) Calculate(src []byte) (any, error) {
+func (i selectorPath) Calculate(src []byte) (any, error) {
 	return gjson.GetBytes(src, i.s).Value(), nil
 }
 
@@ -738,16 +942,160 @@ func (c contains) Calculate(src []byte) (any, error) {
 		return nil, err
 	}
 
-	if reflect.TypeOf(left) != reflect.TypeOf(right) {
+	leftTypeOf := reflect.TypeOf(left)
+
+	if leftTypeOf != reflect.TypeOf(right) && leftTypeOf.Kind() != reflect.Slice {
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
 	}
 
 	switch l := left.(type) {
 	case string:
 		return strings.Contains(l, right.(string)), nil
+	case []any:
+		for _, v := range l {
+			if reflect.DeepEqual(v, right) {
+				return true, nil
+			}
+		}
+		return false, nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
 	}
+}
+
+var _ Expression = (*containsAny)(nil)
+
+type containsAny struct {
+	left  Expression
+	right Expression
+}
+
+func (c containsAny) Calculate(src []byte) (any, error) {
+	left, err := c.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := c.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	leftTypeOf := reflect.TypeOf(left)
+	typesEqual := leftTypeOf == reflect.TypeOf(right)
+
+	if !typesEqual && leftTypeOf.Kind() != reflect.Slice {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+
+		// betting that lists are short and so less expensive than iterating one to create a hash set
+		for _, c := range right.(string) {
+			for _, c2 := range l {
+				if c == c2 {
+					return true, nil
+				}
+			}
+		}
+
+	case []any:
+		switch r := right.(type) {
+		case []any:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+			for _, rv := range r {
+				for _, lv := range l {
+					if reflect.DeepEqual(rv, lv) {
+						return true, nil
+					}
+				}
+			}
+
+		case string:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+			for _, c := range r {
+				for _, v := range l {
+					if reflect.DeepEqual(string(c), v) {
+						return true, nil
+					}
+				}
+			}
+		}
+
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+	}
+	return false, nil
+}
+
+var _ Expression = (*containsAll)(nil)
+
+type containsAll struct {
+	left  Expression
+	right Expression
+}
+
+func (c containsAll) Calculate(src []byte) (any, error) {
+	left, err := c.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := c.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	leftTypeOf := reflect.TypeOf(left)
+	typesEqual := leftTypeOf == reflect.TypeOf(right)
+
+	if !typesEqual && leftTypeOf.Kind() != reflect.Slice {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		// betting that lists are short and so less expensive than iterating one to create a hash set
+	OUTER1:
+		for _, c := range right.(string) {
+			for _, c2 := range l {
+				if c == c2 {
+					continue OUTER1
+				}
+			}
+			return false, nil
+		}
+
+	case []any:
+		switch r := right.(type) {
+		case []any:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+		OUTER2:
+			for _, rv := range r {
+				for _, lv := range l {
+					if reflect.DeepEqual(rv, lv) {
+						continue OUTER2
+					}
+				}
+				return false, nil
+			}
+
+		case string:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+		OUTER3:
+			for _, c := range r {
+				for _, v := range l {
+					if reflect.DeepEqual(string(c), v) {
+						continue OUTER3
+					}
+				}
+				return false, nil
+			}
+		}
+
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+	}
+	return true, nil
 }
 
 var _ Expression = (*startsWith)(nil)
