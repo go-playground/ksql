@@ -989,12 +989,10 @@ func (c containsAny) Calculate(src []byte) (any, error) {
 
 	switch l := left.(type) {
 	case string:
-		leftRunes := []rune(l)
-		rightRunes := []rune(right.(string))
 
 		// betting that lists are short and so less expensive than iterating one to create a hash set
-		for _, c := range rightRunes {
-			for _, c2 := range leftRunes {
+		for _, c := range right.(string) {
+			for _, c2 := range l {
 				if c == c2 {
 					return true, nil
 				}
@@ -1014,9 +1012,8 @@ func (c containsAny) Calculate(src []byte) (any, error) {
 			}
 
 		case string:
-			rightRunes := []rune(r)
 			// betting that lists are short and so less expensive than iterating one to create a hash set
-			for _, c := range rightRunes {
+			for _, c := range r {
 				for _, v := range l {
 					if reflect.DeepEqual(string(c), v) {
 						return true, nil
@@ -1057,13 +1054,10 @@ func (c containsAll) Calculate(src []byte) (any, error) {
 
 	switch l := left.(type) {
 	case string:
-		leftRunes := []rune(l)
-		rightRunes := []rune(right.(string))
-
 		// betting that lists are short and so less expensive than iterating one to create a hash set
 	OUTER1:
-		for _, c := range rightRunes {
-			for _, c2 := range leftRunes {
+		for _, c := range right.(string) {
+			for _, c2 := range l {
 				if c == c2 {
 					continue OUTER1
 				}
@@ -1086,10 +1080,9 @@ func (c containsAll) Calculate(src []byte) (any, error) {
 			}
 
 		case string:
-			rightRunes := []rune(r)
 			// betting that lists are short and so less expensive than iterating one to create a hash set
 		OUTER3:
-			for _, c := range rightRunes {
+			for _, c := range r {
 				for _, v := range l {
 					if reflect.DeepEqual(string(c), v) {
 						continue OUTER3
