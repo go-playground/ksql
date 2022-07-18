@@ -219,6 +219,16 @@ func Test(t *testing.T) {
 			tokens: []Token{{kind: Contains, start: 1, len: 8}},
 		},
 		{
+			name:   "parse contains any",
+			input:  " CONTAINS_ANY ",
+			tokens: []Token{{kind: ContainsAny, start: 1, len: 12}},
+		},
+		{
+			name:   "parse contains all",
+			input:  " CONTAINS_ALL ",
+			tokens: []Token{{kind: ContainsAll, start: 1, len: 12}},
+		},
+		{
 			name:   "parse STARTSWITH",
 			input:  " STARTSWITH ",
 			tokens: []Token{{kind: StartsWith, start: 1, len: 10}},
@@ -301,6 +311,21 @@ func Test(t *testing.T) {
 				{kind: QuotedString, start: 7, len: 12},
 				{kind: Identifier, start: 20, len: 10},
 			},
+		},
+		{
+			name:  "parse bad contains",
+			input: "CONTAINS",
+			err:   ErrInvalidKeyword{s: "CONTAINS"},
+		},
+		{
+			name:  "parse bad contains any",
+			input: "CONTAINS_ANY",
+			err:   ErrInvalidKeyword{s: "CONTAINS_ANY"},
+		},
+		{
+			name:  "parse bad contains all",
+			input: "CONTAINS_ALL",
+			err:   ErrInvalidKeyword{s: "CONTAINS_ALL"},
 		},
 	}
 

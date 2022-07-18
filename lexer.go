@@ -40,6 +40,8 @@ const (
 	Or
 	Not
 	Contains
+	ContainsAny
+	ContainsAll
 	In
 	StartsWith
 	EndsWith
@@ -116,12 +118,19 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 		}
 	case 'C':
 
-		if len(data) > 2 && data[1] == 'O' && data[2] == 'N' {
-			result, err = tokenizeKeyword(data, "CONTAINS", Contains)
-		} else if len(data) > 2 && data[1] == 'O' && data[2] == 'E' {
-			result, err = tokenizeKeyword(data, "COERCE", Coerce)
+		if len(data) > 2 && data[2] == 'N' {
+			// can be one of CONTAINS, CONTAINS_ANY, CONTAINS_ALL
+			if len(data) > 8 && data[8] == '_' {
+				if len(data) > 10 && data[10] == 'N' {
+					result, err = tokenizeKeyword(data, "CONTAINS_ANY", ContainsAny)
+				} else {
+					result, err = tokenizeKeyword(data, "CONTAINS_ALL", ContainsAll)
+				}
+			} else {
+				result, err = tokenizeKeyword(data, "CONTAINS", Contains)
+			}
 		} else {
-			err = ErrUnsupportedCharacter{b: b}
+			result, err = tokenizeKeyword(data, "COERCE", Coerce)
 		}
 
 	case 'I':
@@ -195,7 +204,7 @@ func tokenizeKeyword(data []byte, keyword string, kind TokenKind) (result LexerR
 	end := takeWhile(data, func(b byte) bool {
 		return !isWhitespace(b)
 	})
-	if end > 0 && string(data[:end]) == keyword && len(data) > len(keyword) {
+	if end > 0 && len(data) > len(keyword) && string(data[:end]) == keyword {
 		result = LexerResult{
 			kind: kind,
 			len:  end,

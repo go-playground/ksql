@@ -429,6 +429,34 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 			right: right,
 		}, nil
 
+	case ContainsAny:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return containsAny{
+			left:  current,
+			right: right,
+		}, nil
+
+	case ContainsAll:
+		nextToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(nextToken)
+		if err != nil {
+			return nil, err
+		}
+		return containsAll{
+			left:  current,
+			right: right,
+		}, nil
+
 	case Not:
 		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
@@ -914,7 +942,9 @@ func (c contains) Calculate(src []byte) (any, error) {
 		return nil, err
 	}
 
-	if reflect.TypeOf(left) != reflect.TypeOf(right) && reflect.TypeOf(left).Kind() != reflect.Slice {
+	leftTypeOf := reflect.TypeOf(left)
+
+	if leftTypeOf != reflect.TypeOf(right) && leftTypeOf.Kind() != reflect.Slice {
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
 	}
 
@@ -931,6 +961,148 @@ func (c contains) Calculate(src []byte) (any, error) {
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
 	}
+}
+
+var _ Expression = (*containsAny)(nil)
+
+type containsAny struct {
+	left  Expression
+	right Expression
+}
+
+func (c containsAny) Calculate(src []byte) (any, error) {
+	left, err := c.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := c.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	leftTypeOf := reflect.TypeOf(left)
+	typesEqual := leftTypeOf == reflect.TypeOf(right)
+
+	if !typesEqual && leftTypeOf.Kind() != reflect.Slice {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		leftRunes := []rune(l)
+		rightRunes := []rune(right.(string))
+
+		// betting that lists are short and so less expensive than iterating one to create a hash set
+		for _, c := range rightRunes {
+			for _, c2 := range leftRunes {
+				if c == c2 {
+					return true, nil
+				}
+			}
+		}
+
+	case []any:
+		switch r := right.(type) {
+		case []any:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+			for _, rv := range r {
+				for _, lv := range l {
+					if reflect.DeepEqual(rv, lv) {
+						return true, nil
+					}
+				}
+			}
+
+		case string:
+			rightRunes := []rune(r)
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+			for _, c := range rightRunes {
+				for _, v := range l {
+					if reflect.DeepEqual(string(c), v) {
+						return true, nil
+					}
+				}
+			}
+		}
+
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+	}
+	return false, nil
+}
+
+var _ Expression = (*containsAll)(nil)
+
+type containsAll struct {
+	left  Expression
+	right Expression
+}
+
+func (c containsAll) Calculate(src []byte) (any, error) {
+	left, err := c.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := c.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	leftTypeOf := reflect.TypeOf(left)
+	typesEqual := leftTypeOf == reflect.TypeOf(right)
+
+	if !typesEqual && leftTypeOf.Kind() != reflect.Slice {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
+	}
+
+	switch l := left.(type) {
+	case string:
+		leftRunes := []rune(l)
+		rightRunes := []rune(right.(string))
+
+		// betting that lists are short and so less expensive than iterating one to create a hash set
+	OUTER1:
+		for _, c := range rightRunes {
+			for _, c2 := range leftRunes {
+				if c == c2 {
+					continue OUTER1
+				}
+			}
+			return false, nil
+		}
+
+	case []any:
+		switch r := right.(type) {
+		case []any:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+		OUTER2:
+			for _, rv := range r {
+				for _, lv := range l {
+					if reflect.DeepEqual(rv, lv) {
+						continue OUTER2
+					}
+				}
+				return false, nil
+			}
+
+		case string:
+			rightRunes := []rune(r)
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+		OUTER3:
+			for _, c := range rightRunes {
+				for _, v := range l {
+					if reflect.DeepEqual(string(c), v) {
+						continue OUTER3
+					}
+				}
+				return false, nil
+			}
+		}
+
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+	}
+	return true, nil
 }
 
 var _ Expression = (*startsWith)(nil)

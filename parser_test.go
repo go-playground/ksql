@@ -338,6 +338,72 @@ func TestParser(t *testing.T) {
 			src:      ``,
 			expected: true,
 		},
+		{
+			name:     "string CONTAINS_ANY characters",
+			exp:      `"team" CONTAINS_ANY "im"`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "array CONTAINS_ANY characters",
+			exp:      `["a","b","c"] CONTAINS_ANY "eac"`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "array CONTAINS_ANY characters false",
+			exp:      `["a","b","c"] CONTAINS_ANY "xyz"`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "array CONTAINS_ANY array elements true",
+			exp:      `["a","b","c"] CONTAINS_ANY ["c","d","e"]`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "array CONTAINS_ANY array elements false",
+			exp:      `["a","b","c"] CONTAINS_ANY ["d","e","f"]`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "array !CONTAINS_ANY array elements",
+			exp:      `["a","b","c"] !CONTAINS_ANY ["d","e","f"]`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "string CONTAINS_ALL characters",
+			exp:      `"team" CONTAINS_ALL "meat"`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "array CONTAINS_ALL string characters",
+			exp:      `["a","b","c"] CONTAINS_ALL "cab"`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "array CONTAINS_ALL string characters false",
+			exp:      `["a","b","c"] CONTAINS_ALL "xyz"`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "array CONTAINS_ALL array elements",
+			exp:      `["a","b","c"] CONTAINS_ALL ["c","a","b"]`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "array !CONTAINS_ALL array elements",
+			exp:      `["a","b","c"] !CONTAINS_ALL ["a","b"]`,
+			src:      ``,
+			expected: false,
+		},
 	}
 
 	for _, tc := range tests {
