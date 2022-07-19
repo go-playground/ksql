@@ -43,6 +43,7 @@ const (
 	ContainsAny
 	ContainsAll
 	In
+	Between
 	StartsWith
 	EndsWith
 	OpenBracket
@@ -139,6 +140,8 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 		result, err = tokenizeKeyword(data, "STARTSWITH", StartsWith)
 	case 'E':
 		result, err = tokenizeKeyword(data, "ENDSWITH", EndsWith)
+	case 'B':
+		result, err = tokenizeKeyword(data, "BETWEEN", Between)
 	case 'N':
 		result, err = tokenizeNull(data)
 	case '_':

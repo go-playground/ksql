@@ -404,6 +404,102 @@ func TestParser(t *testing.T) {
 			src:      ``,
 			expected: false,
 		},
+		{
+			name:     "COERCE _datetime_ gt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426001Z" _datetime_ > COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ lt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ < COERCE "2022-07-14T17:50:08.318426001Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ gte gt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426001Z" _datetime_ >= COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ lte lt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ <= COERCE "2022-07-14T17:50:08.318426001Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ gte equal",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ >= COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ lte equal",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ <= COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "num BETWEEN",
+			exp:      `1 BETWEEN 0 10`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "num BETWEEN lhs false",
+			exp:      `0 BETWEEN 0 10`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "num BETWEEN rhs false",
+			exp:      `10 BETWEEN 0 10`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "BETWEEN value null",
+			exp:      `.key BETWEEN 0 10`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "BETWEEN lhs null",
+			exp:      `1 BETWEEN .key 10`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "BETWEEN rhs null",
+			exp:      `1 BETWEEN 0 .key`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "str BETWEEN",
+			exp:      `"g" BETWEEN "a" "z"`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "str BETWEEN false",
+			exp:      `"z" BETWEEN "a" "z"`,
+			src:      ``,
+			expected: false,
+		},
+		{
+			name:     "COERCE _datetime_ BETWEEN",
+			exp:      `COERCE "2022-01-02" _datetime_ BETWEEN COERCE "2022-01-01" _datetime_ COERCE "2022-01-30" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ BETWEEN false",
+			exp:      `COERCE "2022-01-01" _datetime_ BETWEEN COERCE "2022-01-01" _datetime_ COERCE "2022-01-30" _datetime_`,
+			src:      ``,
+			expected: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -418,7 +514,6 @@ func TestParser(t *testing.T) {
 			}
 			assert.NoError(err)
 
-			//fmt.Printf("%#v\n", ex)
 			got, err := ex.Calculate([]byte(tc.src))
 			if tc.err != nil {
 				assert.Error(err)

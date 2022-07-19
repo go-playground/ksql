@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2022-07-19
+### Added
+- Added BETWEEN operator support <value> BETWEEN <value> <value>
+
+### Fixed
+- Missing Gt, Gte, Lt, Lte for DateTime data type.
+
 ## [0.2.0] - 2022-07-18
 ### Fixed
 - Reworked Parsing algorithm fixing a bunch of scoping issues.
@@ -24,7 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial conversion from https://github.com/rust-playground/ksql.
 
-[Unreleased]: https://github.com/go-playground/ksql/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/go-playground/ksql/compare/v0.3.0...HEAD
+[0.2.0]: https://github.com/go-playground/ksql/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/go-playground/ksql/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/go-playground/ksql/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/go-playground/ksql/commit/v0.1.0

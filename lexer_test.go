@@ -327,6 +327,16 @@ func Test(t *testing.T) {
 			input: "CONTAINS_ALL",
 			err:   ErrInvalidKeyword{s: "CONTAINS_ALL"},
 		},
+		{
+			name:  "parse bad between",
+			input: "BETWEEN",
+			err:   ErrInvalidKeyword{s: "BETWEEEN"},
+		},
+		{
+			name:   "parse BETWEEN",
+			input:  "BETWEEN ",
+			tokens: []Token{{kind: Between, start: 0, len: 7}},
+		},
 	}
 
 	for _, tc := range tests {

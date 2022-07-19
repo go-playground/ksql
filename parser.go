@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/araddon/dateparse"
 	"github.com/tidwall/gjson"
@@ -457,6 +458,31 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 			right: right,
 		}, nil
 
+	case Between:
+		lhsToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		left, err := p.parseValue(lhsToken)
+		if err != nil {
+			return nil, err
+		}
+
+		rhsToken, err := p.nextOperatorToken(token)
+		if err != nil {
+			return nil, err
+		}
+		right, err := p.parseValue(rhsToken)
+		if err != nil {
+			return nil, err
+		}
+
+		return between{
+			left:  left,
+			right: right,
+			value: current,
+		}, nil
+
 	case Not:
 		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
@@ -489,6 +515,50 @@ func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error
 		return
 	}
 	return token, nil
+}
+
+var _ Expression = (*between)(nil)
+
+type between struct {
+	left  Expression
+	right Expression
+	value Expression
+}
+
+func (b between) Calculate(src []byte) (any, error) {
+	left, err := b.left.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	right, err := b.right.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+	value, err := b.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	// fast path, if any are nil/null there's no way to actually do the BETWEEN comparison
+	if left == nil || right == nil || value == nil {
+		return false, nil
+	}
+
+	leftType := reflect.TypeOf(left)
+	if !(leftType == reflect.TypeOf(right) && reflect.TypeOf(value) == leftType) {
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v > left.(string) && v < right.(string), nil
+	case float64:
+		return v > left.(float64) && v < right.(float64), nil
+	case time.Time:
+		return v.After(left.(time.Time)) && v.Before(right.(time.Time)), nil
+	default:
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
+	}
 }
 
 var _ Expression = (*coerceDateTime)(nil)
@@ -750,6 +820,8 @@ func (g gt) Calculate(src []byte) (any, error) {
 		return l > right.(string), nil
 	case float64:
 		return l > right.(float64), nil
+	case time.Time:
+		return l.After(right.(time.Time)), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s > %s", left, right)}
 	}
@@ -781,6 +853,9 @@ func (g gte) Calculate(src []byte) (any, error) {
 		return l >= right.(string), nil
 	case float64:
 		return l >= right.(float64), nil
+	case time.Time:
+		r := right.(time.Time)
+		return l.After(r) || l.Equal(r), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s >= %s", left, right)}
 	}
@@ -812,6 +887,8 @@ func (l lt) Calculate(src []byte) (any, error) {
 		return l < right.(string), nil
 	case float64:
 		return l < right.(float64), nil
+	case time.Time:
+		return l.Before(right.(time.Time)), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
 	}
@@ -843,6 +920,9 @@ func (l lte) Calculate(src []byte) (any, error) {
 		return l <= right.(string), nil
 	case float64:
 		return l <= right.(float64), nil
+	case time.Time:
+		r := right.(time.Time)
+		return l.Before(r) || l.Equal(r), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s <= %s", left, right)}
 	}
