@@ -404,6 +404,42 @@ func TestParser(t *testing.T) {
 			src:      ``,
 			expected: false,
 		},
+		{
+			name:     "COERCE _datetime_ gt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426001Z" _datetime_ > COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ lt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ < COERCE "2022-07-14T17:50:08.318426001Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ gte gt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426001Z" _datetime_ >= COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ lte lt",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ <= COERCE "2022-07-14T17:50:08.318426001Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ gte equal",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ >= COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "COERCE _datetime_ lte equal",
+			exp:      `COERCE "2022-07-14T17:50:08.318426000Z" _datetime_ <= COERCE "2022-07-14T17:50:08.318426000Z" _datetime_`,
+			src:      ``,
+			expected: true,
+		},
 	}
 
 	for _, tc := range tests {

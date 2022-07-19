@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/araddon/dateparse"
 	"github.com/tidwall/gjson"
@@ -750,6 +751,8 @@ func (g gt) Calculate(src []byte) (any, error) {
 		return l > right.(string), nil
 	case float64:
 		return l > right.(float64), nil
+	case time.Time:
+		return l.After(right.(time.Time)), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s > %s", left, right)}
 	}
@@ -781,6 +784,9 @@ func (g gte) Calculate(src []byte) (any, error) {
 		return l >= right.(string), nil
 	case float64:
 		return l >= right.(float64), nil
+	case time.Time:
+		r := right.(time.Time)
+		return l.After(r) || l.Equal(r), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s >= %s", left, right)}
 	}
@@ -812,6 +818,8 @@ func (l lt) Calculate(src []byte) (any, error) {
 		return l < right.(string), nil
 	case float64:
 		return l < right.(float64), nil
+	case time.Time:
+		return l.Before(right.(time.Time)), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
 	}
@@ -843,6 +851,9 @@ func (l lte) Calculate(src []byte) (any, error) {
 		return l <= right.(string), nil
 	case float64:
 		return l <= right.(float64), nil
+	case time.Time:
+		r := right.(time.Time)
+		return l.Before(r) || l.Equal(r), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s <= %s", left, right)}
 	}
