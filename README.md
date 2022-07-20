@@ -1,6 +1,6 @@
 ksql
 =====
-![Project status](https://img.shields.io/badge/version-0.3.0-green.svg)
+![Project status](https://img.shields.io/badge/version-0.3.1-green.svg)
 [![GoDoc](https://godoc.org/github.com/go-playground/ksql?status.svg)](https://pkg.go.dev/github.com/go-playground/ksql)
 ![License](https://img.shields.io/dub/l/vibe-d.svg)
 
@@ -69,7 +69,7 @@ Expressions support most mathematical and string expressions see below for detai
 | `CloseBracket` | `]`                      | N/A                                                                                                                                                                                       |
 | `Comma`        | `,`                      | N/A                                                                                                                                                                                       |
 | `QuotedString` | `"sample text"`          | Must start and end with an unescaped `"` character                                                                                                                                        |
-| `Number`       | `123.45`                 | Must start and end with a valid `0-9` digit.                                                                                                                                              |
+| `Number`       | ` 123.45 `               | Must start and end with a space or '+' or '-' when hard coded value in expression and supports `0-9 +- e` characters for numbers and exponent notation.                                   |
 | `BooleanTrue`  | `true`                   | Accepts `true` as a boolean only.                                                                                                                                                         |
 | `BooleanFalse` | `false`                  | Accepts `false` as a boolean only.                                                                                                                                                        |
 | `SelectorPath` | `.selector_path`         | Starts with a `.` and ends with whitespace blank space. This crate currently uses [gjson](https://github.com/tidwall/gjson.rs) and so the full gjson syntax for identifiers is supported. |

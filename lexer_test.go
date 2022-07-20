@@ -337,6 +337,31 @@ func Test(t *testing.T) {
 			input:  "BETWEEN ",
 			tokens: []Token{{kind: Between, start: 0, len: 7}},
 		},
+		{
+			name:   "parse negative number",
+			input:  " -1.23 ",
+			tokens: []Token{{kind: Number, start: 1, len: 5}},
+		},
+		{
+			name:   "parse positive number",
+			input:  " +1.23 ",
+			tokens: []Token{{kind: Number, start: 1, len: 5}},
+		},
+		{
+			name:   "parse positive number",
+			input:  " +1.23 ",
+			tokens: []Token{{kind: Number, start: 1, len: 5}},
+		},
+		{
+			name:   "parse negative exponential number",
+			input:  " -1e10 ",
+			tokens: []Token{{kind: Number, start: 1, len: 5}},
+		},
+		{
+			name:   "parse positive exponential number",
+			input:  " +1e10 ",
+			tokens: []Token{{kind: Number, start: 1, len: 5}},
+		},
 	}
 
 	for _, tc := range tests {

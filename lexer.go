@@ -67,9 +67,17 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 			result = LexerResult{kind: Equals, len: 1}
 		}
 	case '+':
-		result = LexerResult{kind: Add, len: 1}
+		if len(data) > 1 && isDigit(data[1]) {
+			result, err = tokenizeNumber(data)
+		} else {
+			result = LexerResult{kind: Add, len: 1}
+		}
 	case '-':
-		result = LexerResult{kind: Subtract, len: 1}
+		if len(data) > 1 && isDigit(data[1]) {
+			result, err = tokenizeNumber(data)
+		} else {
+			result = LexerResult{kind: Subtract, len: 1}
+		}
 	case '*':
 		result = LexerResult{kind: Multiply, len: 1}
 	case '/':

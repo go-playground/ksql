@@ -500,6 +500,24 @@ func TestParser(t *testing.T) {
 			src:      ``,
 			expected: false,
 		},
+		{
+			name:     "parse exponent number eq",
+			exp:      `1e3 == 1000`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "parse negative exponent number eq",
+			exp:      `-1e-3 == -0.001`,
+			src:      ``,
+			expected: true,
+		},
+		{
+			name:     "parse positive exponent number eq",
+			exp:      `+1e-3 == 0.001`,
+			src:      ``,
+			expected: true,
+		},
 	}
 
 	for _, tc := range tests {
