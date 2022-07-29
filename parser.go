@@ -1058,23 +1058,35 @@ func (c containsAny) Calculate(src []byte) (any, error) {
 		return nil, err
 	}
 
-	leftTypeOf := reflect.TypeOf(left)
-	typesEqual := leftTypeOf == reflect.TypeOf(right)
-
-	if !typesEqual && leftTypeOf.Kind() != reflect.Slice {
-		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
-	}
-
 	switch l := left.(type) {
 	case string:
 
-		// betting that lists are short and so less expensive than iterating one to create a hash set
-		for _, c := range right.(string) {
-			for _, c2 := range l {
-				if c == c2 {
+		switch r := right.(type) {
+		case string:
+
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+			for _, c := range r {
+				for _, c2 := range l {
+					if c == c2 {
+						return true, nil
+					}
+				}
+			}
+
+		case []any:
+			for _, v := range r {
+				s, ok := v.(string)
+				if !ok {
+					continue
+				}
+				if l == s {
 					return true, nil
 				}
 			}
+			return false, nil
+
+		default:
+			return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS_ANY %s", left, right)}
 		}
 
 	case []any:
@@ -1098,10 +1110,13 @@ func (c containsAny) Calculate(src []byte) (any, error) {
 					}
 				}
 			}
+
+		default:
+			return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS_ANY %s", left, right)}
 		}
 
 	default:
-		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS_ANY %s !", left, right)}
 	}
 	return false, nil
 }
@@ -1123,35 +1138,43 @@ func (c containsAll) Calculate(src []byte) (any, error) {
 		return nil, err
 	}
 
-	leftTypeOf := reflect.TypeOf(left)
-	typesEqual := leftTypeOf == reflect.TypeOf(right)
-
-	if !typesEqual && leftTypeOf.Kind() != reflect.Slice {
-		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s", left, right)}
-	}
-
 	switch l := left.(type) {
 	case string:
-		// betting that lists are short and so less expensive than iterating one to create a hash set
-	OUTER1:
-		for _, c := range right.(string) {
-			for _, c2 := range l {
-				if c == c2 {
-					continue OUTER1
+		switch r := right.(type) {
+		case string:
+			// betting that lists are short and so less expensive than iterating one to create a hash set
+		OUTER1:
+			for _, c := range r {
+				for _, c2 := range l {
+					if c == c2 {
+						continue OUTER1
+					}
+				}
+				return false, nil
+			}
+
+		case []any:
+			for _, v := range r {
+				s, ok := v.(string)
+				if !ok || !strings.Contains(l, s) {
+					return false, nil
 				}
 			}
-			return false, nil
+			return true, nil
+
+		default:
+			return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS_ALL %s", left, right)}
 		}
 
 	case []any:
 		switch r := right.(type) {
 		case []any:
 			// betting that lists are short and so less expensive than iterating one to create a hash set
-		OUTER2:
+		OUTER3:
 			for _, rv := range r {
 				for _, lv := range l {
 					if reflect.DeepEqual(rv, lv) {
-						continue OUTER2
+						continue OUTER3
 					}
 				}
 				return false, nil
@@ -1159,19 +1182,21 @@ func (c containsAll) Calculate(src []byte) (any, error) {
 
 		case string:
 			// betting that lists are short and so less expensive than iterating one to create a hash set
-		OUTER3:
+		OUTER4:
 			for _, c := range r {
 				for _, v := range l {
 					if reflect.DeepEqual(string(c), v) {
-						continue OUTER3
+						continue OUTER4
 					}
 				}
 				return false, nil
 			}
+		default:
+			return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS_ALL %s", left, right)}
 		}
 
 	default:
-		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS %s !", left, right)}
+		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s CONTAINS_ALL %s !", left, right)}
 	}
 	return true, nil
 }
