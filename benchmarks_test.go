@@ -93,7 +93,7 @@ func BenchmarkParsingCoerceDateTimeSelectorConstant(b *testing.B) {
 }
 
 func BenchmarkExecutionNumPlusNum(b *testing.B) {
-	benchExecution(b, "1 + 1", ``)
+	benchExecution(b, "1 + 1 + 1 + 1 + 1", ``)
 }
 
 func BenchmarkExecutionIdentNum(b *testing.B) {
