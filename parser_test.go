@@ -554,6 +554,30 @@ func TestParser(t *testing.T) {
 			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
 			expected: true,
 		},
+		{
+			name:     "CONTAINS_ANY string + array 1",
+			exp:      `.FirstName CONTAINS_ANY ["noah", "emily", "alexandra","scott"]`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "CONTAINS_ANY string + array 2",
+			exp:      `.FirstName CONTAINS_ANY ["noah", "emily", "alexandra"]`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: false,
+		},
+		{
+			name:     "CONTAINS_ALL string + array 1",
+			exp:      `.FirstName CONTAINS_ALL ["sc", "ot", "ott","cot"]`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "CONTAINS_ALL string + array 2",
+			exp:      `.FirstName CONTAINS_ALL ["sc", "ot", "ott","b"]`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: false,
+		},
 	}
 
 	for _, tc := range tests {
