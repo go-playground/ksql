@@ -117,7 +117,7 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 		expression, err := p.parseExpression()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return nil, errors.New("expression after open parenthesis '(' ends unexpectedly.")
+				return nil, errors.New("expression after open parenthesis '(' ends unexpectedly")
 			}
 			return nil, err
 		}
@@ -347,12 +347,11 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 		}, nil
 
 	case Or:
-		nextToken, err := p.nextOperatorToken(token)
+		right, err := p.parseExpression()
 		if err != nil {
-			return nil, err
-		}
-		right, err := p.parseValue(nextToken)
-		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("expression after or '||' ends unexpectedly")
+			}
 			return nil, err
 		}
 		return or{
@@ -361,12 +360,11 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 		}, nil
 
 	case And:
-		nextToken, err := p.nextOperatorToken(token)
+		right, err := p.parseExpression()
 		if err != nil {
-			return nil, err
-		}
-		right, err := p.parseValue(nextToken)
-		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errors.New("expression after or '&&' ends unexpectedly")
+			}
 			return nil, err
 		}
 		return and{

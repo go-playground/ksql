@@ -518,6 +518,42 @@ func TestParser(t *testing.T) {
 			src:      ``,
 			expected: true,
 		},
+		{
+			name:     "random expression 1",
+			exp:      `.NumberOfEmployees > "200" && .AnnualRevenue == "2000000"`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "random expression 2",
+			exp:      `.AnnualRevenue >= "5000000" || (.NumberOfEmployees > "200" && .AnnualRevenue == "2000000")`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "random expression 3",
+			exp:      `.AnnualRevenue >= "5000000" || (true && .AnnualRevenue == "2000000")`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "random expression 4",
+			exp:      `.AnnualRevenue >= "5000000" || (.NumberOfEmployees > "200" && true)`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "random expression 5",
+			exp:      `true || (.NumberOfEmployees > "200" && .AnnualRevenue == "2000000")`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
+		{
+			name:     "random expression 6",
+			exp:      `false || (.NumberOfEmployees > "200" && .AnnualRevenue == "2000000")`,
+			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
+			expected: true,
+		},
 	}
 
 	for _, tc := range tests {
