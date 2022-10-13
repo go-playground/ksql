@@ -198,6 +198,8 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 			} else {
 				return expression, nil
 			}
+		case "_lowercase_":
+			return coerceLowercase{value: value}, nil
 		default:
 			return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
 		}
@@ -556,6 +558,26 @@ func (b between) Calculate(src []byte) (any, error) {
 		return v.After(left.(time.Time)) && v.Before(right.(time.Time)), nil
 	default:
 		return nil, ErrUnsupportedTypeComparison{s: fmt.Sprintf("%s < %s", left, right)}
+	}
+}
+
+var _ Expression = (*coerceLowercase)(nil)
+
+type coerceLowercase struct {
+	value Expression
+}
+
+func (c coerceLowercase) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		return strings.ToLower(v), nil
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a lowescase", value)}
 	}
 }
 

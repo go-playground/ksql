@@ -578,6 +578,18 @@ func TestParser(t *testing.T) {
 			src:      `{"AnnualRevenue":"2000000","NumberOfEmployees":"201","FirstName":"scott"}`,
 			expected: false,
 		},
+		{
+			name:     "COERCE Lowercase",
+			exp:      `COERCE .name _lowercase_`,
+			src:      `{"name":"Joeybloggs"}`,
+			expected: "joeybloggs",
+		},
+		{
+			name:     "COERCE Lowercase equality",
+			exp:      `COERCE .f1 _lowercase_ == COERCE .f2 _lowercase_`,
+			src:      `{"f1":"dean","f2":"DeAN"}`,
+			expected: true,
+		},
 	}
 
 	for _, tc := range tests {
