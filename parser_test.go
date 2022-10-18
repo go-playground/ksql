@@ -590,6 +590,12 @@ func TestParser(t *testing.T) {
 			src:      `{"f1":"dean","f2":"DeAN"}`,
 			expected: true,
 		},
+		{
+			name:     "CONTAINS_ANY contains, lowercase",
+			exp:      `COERCE .Name _lowercase_ CONTAINS_ANY ["dodgers","yankees","tigers"]`,
+			src:      `{"Name":"The New York Yankees"}`,
+			expected: true,
+		},
 	}
 
 	for _, tc := range tests {
