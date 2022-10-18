@@ -1101,7 +1101,7 @@ func (c containsAny) Calculate(src []byte) (any, error) {
 				if !ok {
 					continue
 				}
-				if l == s {
+				if strings.Contains(l, s) {
 					return true, nil
 				}
 			}
