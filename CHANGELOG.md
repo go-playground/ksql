@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2022-10-18
+### Fixed
+- Fixed CONTAINS_ANY for string contains comparisons with slice/array.
+
 ## [0.5.0] - 2022-10-13
 ### Added
 - Added new `_lowercase_` COERCE identifier.
@@ -48,8 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial conversion from https://github.com/rust-playground/ksql.
 
-[Unreleased]: https://github.com/go-playground/ksql/compare/v0.5.0...HEAD
-[0.4.0]: https://github.com/go-playground/ksql/compare/v0.4.0...v0.5.0
+[Unreleased]: https://github.com/go-playground/ksql/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/go-playground/ksql/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/go-playground/ksql/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/go-playground/ksql/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/go-playground/ksql/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/go-playground/ksql/compare/v0.3.0...v0.3.1
