@@ -614,6 +614,12 @@ func TestParser(t *testing.T) {
 			src:      `{"name":"mr."}`,
 			expected: "Mr.",
 		},
+		{
+			name:     "COERCE Multiple",
+			exp:      `COERCE .name _uppercase_,_title_`,
+			src:      `{"name":"mr."}`,
+			expected: "Mr.",
+		},
 	}
 
 	for _, tc := range tests {

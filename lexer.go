@@ -168,7 +168,7 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 
 func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 	end := takeWhile(data, func(b byte) bool {
-		return !isWhitespace(b) && b != ')' && b != ']'
+		return !isWhitespace(b) && b != ')' && b != ']' && b != ','
 	})
 	// identifier must start and end with underscore
 	if end > 0 && data[end-1] == '_' {
