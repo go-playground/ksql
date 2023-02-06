@@ -51,13 +51,15 @@ type parser struct {
 func (p *parser) parseExpression() (current Expression, err error) {
 
 	for {
-		token, err := p.tokenizer.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return current, nil
-			}
-			return nil, err
+		next := p.tokenizer.Next()
+		if next.IsNone() {
+			return current, nil
 		}
+		result := next.Unwrap()
+		if result.IsErr() {
+			return nil, result.Err()
+		}
+		token := result.Unwrap()
 
 		if current == nil {
 			// look for nextToken value
@@ -86,13 +88,15 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 
 	FOR:
 		for {
-			token, err := p.tokenizer.Next()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return nil, errors.New("unclosed Array '['")
-				}
-				return nil, err
+			next := p.tokenizer.Next()
+			if next.IsNone() {
+				return nil, errors.New("unclosed Array '['")
 			}
+			result := next.Unwrap()
+			if result.IsErr() {
+				return nil, result.Err()
+			}
+			token := result.Unwrap()
 
 			switch token.kind {
 			case CloseBracket:
@@ -171,14 +175,15 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 			return nil, err
 		}
 
-		identifierToken, err := p.tokenizer.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return nil, errors.New("no identifier after value for: COERCE")
-			}
-			return nil, err
+		next := p.tokenizer.Next()
+		if next.IsNone() {
+			return nil, errors.New("no identifier after value for: COERCE")
 		}
-
+		result := next.Unwrap()
+		if result.IsErr() {
+			return nil, result.Err()
+		}
+		identifierToken := result.Unwrap()
 		start := int(identifierToken.start)
 		identifier := string(p.exp[start : start+int(identifierToken.len)])
 
@@ -505,16 +510,18 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 }
 
 func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error) {
-	token, err = p.tokenizer.Next()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			start := int(operationToken.start)
-			err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
-			return
-		}
+	next := p.tokenizer.Next()
+	if next.IsNone() {
+		start := int(operationToken.start)
+		err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
 		return
 	}
-	return token, nil
+	result := next.Unwrap()
+	if result.IsErr() {
+		err = result.Err()
+		return
+	}
+	return result.Unwrap(), nil
 }
 
 var _ Expression = (*between)(nil)

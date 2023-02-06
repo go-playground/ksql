@@ -1,7 +1,8 @@
 package ksql
 
 import (
-	"io"
+	optionext "github.com/go-playground/pkg/v5/values/option"
+	resultext "github.com/go-playground/pkg/v5/values/result"
 )
 
 // Token represents a lexed token
@@ -55,7 +56,7 @@ const (
 	Identifier
 )
 
-/// Try to lex a single token from the input stream.
+// / Try to lex a single token from the input stream.
 func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 	b := data[0]
 
@@ -327,7 +328,7 @@ func tokenizeString(data []byte, quote byte) (result LexerResult, err error) {
 	return
 }
 
-/// Consumes bytes while a predicate evaluates to true.
+// / Consumes bytes while a predicate evaluates to true.
 func takeWhile(data []byte, pred func(byte) bool) (end uint16) {
 	for _, b := range data {
 		if !pred(b) {
@@ -358,12 +359,11 @@ func NewTokenizer(src []byte) *Tokenizer {
 	}
 }
 
-func (t *Tokenizer) Next() (token Token, err error) {
+func (t *Tokenizer) Next() optionext.Option[resultext.Result[Token, error]] {
 	t.skipWhitespace()
 
 	if len(t.remaining) == 0 {
-		err = io.EOF
-		return
+		return optionext.None[resultext.Result[Token, error]]()
 	}
 	return t.nextToken()
 }
@@ -373,19 +373,18 @@ func (t *Tokenizer) skipWhitespace() {
 	t.chomp(skipped)
 }
 
-func (t *Tokenizer) nextToken() (token Token, err error) {
-	var result LexerResult
-	result, err = tokenizeSingleToken(t.remaining)
+func (t *Tokenizer) nextToken() optionext.Option[resultext.Result[Token, error]] {
+	result, err := tokenizeSingleToken(t.remaining)
 	if err != nil {
-		return
+		return optionext.Some(resultext.Err[Token, error](err))
 	}
-	token = Token{
+	token := Token{
 		start: t.pos,
 		len:   result.len,
 		kind:  result.kind,
 	}
 	t.chomp(result.len)
-	return
+	return optionext.Some(resultext.Ok[Token, error](token))
 }
 
 func (t *Tokenizer) chomp(num uint16) {
