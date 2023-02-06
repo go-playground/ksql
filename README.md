@@ -7,7 +7,7 @@ ksql
 **Is a JSON data expression lexer, parser, cli and library.**
 
 #### Requirements
-- Go 1.18+
+- Go 1.19+
 
 #### How to install CLI
 ```shell
