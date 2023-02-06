@@ -1,8 +1,6 @@
 package ksql
 
 import (
-	"errors"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -385,13 +383,15 @@ func collect(src []byte) (tokens []Token, err error) {
 	tokenizer := NewTokenizer(src)
 
 	for {
-		token, err := tokenizer.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return tokens, nil
-			}
-			return tokens, err
+		next := tokenizer.Next()
+		if next.IsNone() {
+			break
 		}
-		tokens = append(tokens, token)
+		result := next.Unwrap()
+		if result.IsErr() {
+			return nil, result.Err()
+		}
+		tokens = append(tokens, result.Unwrap())
 	}
+	return
 }

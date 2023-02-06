@@ -3,11 +3,15 @@ package ksql
 import (
 	"errors"
 	"fmt"
+	"github.com/go-playground/itertools"
+	resultext "github.com/go-playground/pkg/v5/values/result"
 	"io"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/araddon/dateparse"
 	"github.com/tidwall/gjson"
@@ -28,7 +32,7 @@ type Expression interface {
 func Parse(expression []byte) (Expression, error) {
 	p := parser{
 		exp:       expression,
-		tokenizer: NewTokenizer(expression),
+		tokenizer: itertools.Iter[resultext.Result[Token, error]](NewTokenizer(expression)).Peekable(),
 	}
 
 	result, err := p.parseExpression()
@@ -45,19 +49,21 @@ func Parse(expression []byte) (Expression, error) {
 // Parser parses and returns a supplied expression
 type parser struct {
 	exp       []byte
-	tokenizer *Tokenizer
+	tokenizer itertools.PeekableIterator[resultext.Result[Token, error]]
 }
 
 func (p *parser) parseExpression() (current Expression, err error) {
 
 	for {
-		token, err := p.tokenizer.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				return current, nil
-			}
-			return nil, err
+		next := p.tokenizer.Next()
+		if next.IsNone() {
+			return current, nil
 		}
+		result := next.Unwrap()
+		if result.IsErr() {
+			return nil, result.Err()
+		}
+		token := result.Unwrap()
 
 		if current == nil {
 			// look for nextToken value
@@ -86,13 +92,15 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 
 	FOR:
 		for {
-			token, err := p.tokenizer.Next()
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					return nil, errors.New("unclosed Array '['")
-				}
-				return nil, err
+			next := p.tokenizer.Next()
+			if next.IsNone() {
+				return nil, errors.New("unclosed Array '['")
 			}
+			result := next.Unwrap()
+			if result.IsErr() {
+				return nil, result.Err()
+			}
+			token := result.Unwrap()
 
 			switch token.kind {
 			case CloseBracket:
@@ -166,43 +174,57 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 			constEligible = true
 		}
 
-		value, err := p.parseValue(nextToken)
+		expression, err := p.parseValue(nextToken)
 		if err != nil {
 			return nil, err
 		}
 
-		identifierToken, err := p.tokenizer.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
+		for {
+			next := p.tokenizer.Next()
+			if next.IsNone() {
 				return nil, errors.New("no identifier after value for: COERCE")
 			}
-			return nil, err
-		}
-
-		start := int(identifierToken.start)
-		identifier := string(p.exp[start : start+int(identifierToken.len)])
-
-		if identifierToken.kind != Identifier {
-			return nil, fmt.Errorf("COERCE missing data type identifier, found instead: %s", identifier)
-		}
-
-		switch identifier {
-		case "_datetime_":
-			expression := coerceDateTime{value: value}
-			if constEligible {
-				value, err := expression.Calculate([]byte{})
-				if err != nil {
-					return nil, err
-				}
-				return coercedConstant{value: value}, nil
-			} else {
-				return expression, nil
+			result := next.Unwrap()
+			if result.IsErr() {
+				return nil, result.Err()
 			}
-		case "_lowercase_":
-			return coerceLowercase{value: value}, nil
-		default:
-			return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
+			identifierToken := result.Unwrap()
+			start := int(identifierToken.start)
+			identifier := string(p.exp[start : start+int(identifierToken.len)])
+
+			if identifierToken.kind != Identifier {
+				return nil, fmt.Errorf("COERCE missing data type identifier, found instead: %s", identifier)
+			}
+
+			switch identifier {
+			case "_datetime_":
+				expression = coerceDateTime{value: expression}
+				if constEligible {
+					value, err := expression.Calculate([]byte{})
+					if err != nil {
+						return nil, err
+					}
+					expression = coercedConstant{value: value}
+				} else {
+					return expression, nil
+				}
+			case "_lowercase_":
+				expression = coerceLowercase{value: expression}
+			case "_uppercase_":
+				expression = coerceUppercase{value: expression}
+			case "_title_":
+				expression = coerceTitle{value: expression}
+			default:
+				return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
+			}
+			nextPeeked := p.tokenizer.Peek()
+			if nextPeeked.IsSome() && nextPeeked.Unwrap().IsOk() && nextPeeked.Unwrap().Unwrap().kind == Comma {
+				_ = p.tokenizer.Next() // consume peeked comma
+				continue
+			}
+			break
 		}
+		return expression, nil
 
 	case Not:
 		nextToken, err := p.nextOperatorToken(token)
@@ -505,16 +527,18 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 }
 
 func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error) {
-	token, err = p.tokenizer.Next()
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			start := int(operationToken.start)
-			err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
-			return
-		}
+	next := p.tokenizer.Next()
+	if next.IsNone() {
+		start := int(operationToken.start)
+		err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
 		return
 	}
-	return token, nil
+	result := next.Unwrap()
+	if result.IsErr() {
+		err = result.Err()
+		return
+	}
+	return result.Unwrap(), nil
 }
 
 var _ Expression = (*between)(nil)
@@ -578,6 +602,50 @@ func (c coerceLowercase) Calculate(src []byte) (any, error) {
 		return strings.ToLower(v), nil
 	default:
 		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a lowescase", value)}
+	}
+}
+
+var _ Expression = (*coerceUppercase)(nil)
+
+type coerceUppercase struct {
+	value Expression
+}
+
+func (c coerceUppercase) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		return strings.ToUpper(v), nil
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a uppercase", value)}
+	}
+}
+
+var _ Expression = (*coerceTitle)(nil)
+
+type coerceTitle struct {
+	value Expression
+}
+
+func (c coerceTitle) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		r, size := utf8.DecodeRuneInString(v)
+		if size == 0 {
+			return v, nil
+		}
+		return string(unicode.ToUpper(r)) + strings.ToLower(v[1:]), nil
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a uppercase", value)}
 	}
 }
 

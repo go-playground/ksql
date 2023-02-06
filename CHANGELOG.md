@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2023-01-05
+### Added
+- Added new `_uppercase_` & `_title_` COERCE identifiers.
+- Added ability to use multiple COERCE identifiers at once separated by a comma.
+- Added CLI ability to return original data if using an expression that returns a boolean.
+
 ## [0.5.1] - 2022-10-18
 ### Fixed
 - Fixed CONTAINS_ANY for string contains comparisons with slice/array.
@@ -52,7 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial conversion from https://github.com/rust-playground/ksql.
 
-[Unreleased]: https://github.com/go-playground/ksql/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/go-playground/ksql/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/go-playground/ksql/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/go-playground/ksql/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/go-playground/ksql/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/go-playground/ksql/compare/v0.3.2...v0.4.0

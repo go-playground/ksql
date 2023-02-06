@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -11,35 +12,62 @@ import (
 )
 
 func main() {
-	args := os.Args[1:]
+
+	var outputOriginal bool
+	flag.BoolVar(&outputOriginal, "o", false, "Indicates if the original data will be output after applying the expression. The results of the expression MUST be a boolean otherwise the output will be ignored.")
+	flag.Usage = usage
+	flag.Parse()
+
 	isPipe := isInputFromPipe()
-	if (len(args) < 2 && !isPipe) || (len(args) < 1 && isPipe) {
-		usage()
+	if (flag.NArg() < 2 && !isPipe) || (flag.NArg() < 1 && isPipe) {
+		flag.Usage()
 		return
 	}
 
-	ex, err := ksql.Parse([]byte(args[0]))
+	ex, err := ksql.Parse([]byte(flag.Arg(0)))
 	if err != nil {
-		usage()
+		flag.Usage()
 		return
 	}
 
 	var input []byte
+	w := bufio.NewWriter(os.Stdout)
 
 	if isPipe {
-		w := bufio.NewWriter(os.Stdout)
-		enc := json.NewEncoder(w)
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Buffer(make([]byte, 0, 200*bytesext.KiB), 5*bytesext.MiB)
-		for scanner.Scan() {
-			result, err := ex.Calculate(scanner.Bytes())
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "reading standard input:", err)
-				return
+
+		if outputOriginal {
+			for scanner.Scan() {
+				input := scanner.Bytes()
+				result, err := ex.Calculate(input)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "reading standard input:", err)
+					return
+				}
+				if result, ok := result.(bool); ok && result {
+					_, err := w.Write(input)
+					if err != nil {
+						fmt.Fprintln(os.Stderr, "writing standard output:", err)
+					}
+					err = w.WriteByte('\n')
+					if err != nil {
+						fmt.Fprintln(os.Stderr, "writing standard output:", err)
+					}
+				}
 			}
-			if err := enc.Encode(result); err != nil {
-				fmt.Fprintln(os.Stderr, "encoding result to standard output:", err)
-				return
+		} else {
+			enc := json.NewEncoder(w)
+			for scanner.Scan() {
+				result, err := ex.Calculate(scanner.Bytes())
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "reading standard input:", err)
+					return
+				}
+				if err := enc.Encode(result); err != nil {
+					fmt.Fprintln(os.Stderr, "encoding result to standard output:", err)
+					return
+				}
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -49,24 +77,39 @@ func main() {
 			fmt.Fprintln(os.Stderr, "writing standard output:", err)
 		}
 	} else {
-		input = []byte(args[1])
+		input = []byte(flag.Arg(1))
 		result, err := ex.Calculate(input)
 		if err != nil {
-			usage()
+			flag.Usage()
 			return
 		}
-		enc := json.NewEncoder(os.Stderr)
-		if err := enc.Encode(result); err != nil {
-			fmt.Fprintln(os.Stderr, "encoding result to standard output:", err)
-			return
+		if outputOriginal {
+			if result, ok := result.(bool); ok && result {
+				_, err := w.Write(input)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "writing standard output:", err)
+				}
+				err = w.WriteByte('\n')
+				if err != nil {
+					fmt.Fprintln(os.Stderr, "writing standard output:", err)
+				}
+			}
+		} else {
+			enc := json.NewEncoder(w)
+			if err := enc.Encode(result); err != nil {
+				fmt.Fprintln(os.Stderr, "encoding result to standard output:", err)
+				return
+			}
+		}
+		if err = w.Flush(); err != nil {
+			fmt.Fprintln(os.Stderr, "writing standard output:", err)
 		}
 	}
 }
 
 func usage() {
-	fmt.Println("ksql <expression> <json>")
-	fmt.Println("or")
-	fmt.Println("echo '{{}}' | ksql <expression> -")
+	fmt.Println("ksql [OPTIONS] <EXPRESSION> [DATA]")
+	flag.PrintDefaults()
 }
 
 func isInputFromPipe() bool {
