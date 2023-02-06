@@ -3,6 +3,8 @@ package ksql
 import (
 	"errors"
 	"fmt"
+	"github.com/go-playground/itertools"
+	resultext "github.com/go-playground/pkg/v5/values/result"
 	"io"
 	"reflect"
 	"strconv"
@@ -28,7 +30,7 @@ type Expression interface {
 func Parse(expression []byte) (Expression, error) {
 	p := parser{
 		exp:       expression,
-		tokenizer: NewTokenizer(expression),
+		tokenizer: itertools.Iter[resultext.Result[Token, error]](NewTokenizer(expression)).Peekable(),
 	}
 
 	result, err := p.parseExpression()
@@ -45,7 +47,7 @@ func Parse(expression []byte) (Expression, error) {
 // Parser parses and returns a supplied expression
 type parser struct {
 	exp       []byte
-	tokenizer *Tokenizer
+	tokenizer itertools.Iterator[resultext.Result[Token, error]]
 }
 
 func (p *parser) parseExpression() (current Expression, err error) {
