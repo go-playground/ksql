@@ -879,6 +879,7 @@ func (e eq) Calculate(src []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return reflect.DeepEqual(left, right), nil
 }
 
@@ -1027,6 +1028,7 @@ func (n not) Calculate(src []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	switch t := value.(type) {
 	case bool:
 		return !t, nil
@@ -1047,6 +1049,14 @@ func (o or) Calculate(src []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	switch t := left.(type) {
+	case bool:
+		if t {
+			return true, nil
+		}
+	}
+
 	right, err := o.right.Calculate(src)
 	if err != nil {
 		return nil, err
@@ -1076,6 +1086,16 @@ func (a and) Calculate(src []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	switch t := left.(type) {
+	case bool:
+		if !t {
+			return false, nil
+		}
+	default:
+		return false, nil
+	}
+
 	right, err := a.right.Calculate(src)
 	if err != nil {
 		return nil, err

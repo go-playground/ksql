@@ -1,10 +1,9 @@
 package ksql
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestParser(t *testing.T) {
@@ -619,6 +618,12 @@ func TestParser(t *testing.T) {
 			exp:      `COERCE .name _uppercase_,_title_`,
 			src:      `{"name":"mr."}`,
 			expected: "Mr.",
+		},
+		{
+			name:     "NOT NULL AND",
+			exp:      `.MyValue != NULL && .MyValue > 19`,
+			src:      `{}`,
+			expected: false,
 		},
 	}
 
