@@ -1049,6 +1049,14 @@ func (o or) Calculate(src []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	switch t := left.(type) {
+	case bool:
+		if t {
+			return true, nil
+		}
+	}
+
 	right, err := o.right.Calculate(src)
 	if err != nil {
 		return nil, err
@@ -1091,15 +1099,6 @@ func (a and) Calculate(src []byte) (any, error) {
 	right, err := a.right.Calculate(src)
 	if err != nil {
 		return nil, err
-	}
-
-	switch t := right.(type) {
-	case bool:
-		if !t {
-			return false, nil
-		}
-	default:
-		return false, nil
 	}
 
 	if reflect.TypeOf(left) != reflect.TypeOf(right) {
