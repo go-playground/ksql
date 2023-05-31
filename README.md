@@ -1,6 +1,6 @@
 ksql
 =====
-![Project status](https://img.shields.io/badge/version-0.6.1-green.svg)
+![Project status](https://img.shields.io/badge/version-0.7.0-green.svg)
 [![GoDoc](https://godoc.org/github.com/go-playground/ksql?status.svg)](https://pkg.go.dev/github.com/go-playground/ksql)
 ![License](https://img.shields.io/dub/l/vibe-d.svg)
 
@@ -89,12 +89,14 @@ Expressions support most mathematical and string expressions see below for detai
 
 #### COERCE Types
 
-| Type          | Description                                                                                            |
-|---------------|--------------------------------------------------------------------------------------------------------|
-| `_datetime_`  | This attempts to convert the type into a DateTime.                                                     |
-| `_lowercase_` | This converts the text into lowercase.                                                                 |
-| `_uppercase_` | This converts the text into uppercase.                                                                 |
-| `_title_`     | This converts the text into title case, when the first letter is capitalized but the rest lower cased. |
+| Type          | Description                                                                                                              |
+|---------------|--------------------------------------------------------------------------------------------------------------------------|
+| `_datetime_`  | This attempts to convert the type into a DateTime.                                                                       |
+| `_lowercase_` | This converts the text into lowercase.                                                                                   |
+| `_uppercase_` | This converts the text into uppercase.                                                                                   |
+| `_title_`     | This converts the text into title case, when the first letter is capitalized but the rest lower cased.                   |
+| `_string_`    | This converts the value into a string and supports the Value's String, Number, Bool, DateTime with nanosecond precision. |
+| `_number_`    | This converts the value into an f64 number and supports the Value's Null, String, Number, Bool and DateTime.             |
 
 #### License
 

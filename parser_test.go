@@ -1,6 +1,7 @@
 package ksql
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -625,6 +626,84 @@ func TestParser(t *testing.T) {
 			src:      `{}`,
 			expected: false,
 		},
+		{
+			name:     "COERCE string to string",
+			exp:      `COERCE .name _string_`,
+			src:      `{"name":"Joeybloggs"}`,
+			expected: "Joeybloggs",
+		},
+		{
+			name:     "COERCE null to string",
+			exp:      `COERCE .name _string_`,
+			src:      `{"name":null}`,
+			expected: "null",
+		},
+		{
+			name:     "COERCE true bool to string",
+			exp:      `COERCE .name _string_`,
+			src:      `{"name":true}`,
+			expected: "true",
+		},
+		{
+			name:     "COERCE false bool to string",
+			exp:      `COERCE .name _string_`,
+			src:      `{"name":false}`,
+			expected: "false",
+		},
+		{
+			name:     "COERCE number to string",
+			exp:      `COERCE .name _string_`,
+			src:      `{"name":10}`,
+			expected: "10",
+		},
+		{
+			name:     "COERCE number to string 2",
+			exp:      `COERCE .name _string_`,
+			src:      `{"name":10.03}`,
+			expected: "10.03",
+		},
+		{
+			name:     "COERCE DateTime to string",
+			exp:      `COERCE .name _datetime_,_string_`,
+			src:      `{"name":"2023-05-30T06:21:05Z"}`,
+			expected: "2023-05-30T06:21:05Z",
+		},
+		{
+			name:     "COERCE types to concat string",
+			exp:      `.name + ' - Age ' + COERCE .age _string_`,
+			src:      `{"name":"Joeybloggs","age":39}`,
+			expected: "Joeybloggs - Age 39",
+		},
+		{
+			name:     "COERCE Number to Number",
+			exp:      `COERCE .key _number_`,
+			src:      `{"key":1}`,
+			expected: 1.0,
+		},
+		{
+			name:     "COERCE String to Number",
+			exp:      `COERCE .key _number_`,
+			src:      `{"key":"2"}`,
+			expected: 2.0,
+		},
+		{
+			name:     "COERCE true Bool to Number",
+			exp:      `COERCE .key _number_`,
+			src:      `{"key":true}`,
+			expected: 1.0,
+		},
+		{
+			name:     "COERCE false Bool to Number",
+			exp:      `COERCE .key _number_`,
+			src:      `{"key":false}`,
+			expected: 0.0,
+		},
+		{
+			name:     "COERCE DateTime to Number",
+			exp:      `COERCE .key _datetime_,_number_`,
+			src:      `{"key":"2023-05-30T06:21:05Z"}`,
+			expected: 1.685427665e18,
+		},
 	}
 
 	for _, tc := range tests {
@@ -637,6 +716,7 @@ func TestParser(t *testing.T) {
 				assert.Error(err)
 				return
 			}
+			fmt.Println(err)
 			assert.NoError(err)
 
 			got, err := ex.Calculate([]byte(tc.src))
