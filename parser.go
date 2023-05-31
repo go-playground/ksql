@@ -205,11 +205,13 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 						return nil, err
 					}
 					expression = coercedConstant{value: value}
-				} else {
-					return expression, nil
 				}
 			case "_lowercase_":
 				expression = coerceLowercase{value: expression}
+			case "_string_":
+				expression = coerceString{value: expression}
+			case "_number_":
+				expression = coerceNumber{value: expression}
 			case "_uppercase_":
 				expression = coerceUppercase{value: expression}
 			case "_title_":
@@ -585,6 +587,72 @@ func (b between) Calculate(src []byte) (any, error) {
 	}
 }
 
+var _ Expression = (*coerceNumber)(nil)
+
+type coerceNumber struct {
+	value Expression
+}
+
+func (c coerceNumber) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a number", value)}
+		}
+		return f, nil
+
+	case float64:
+		return v, nil
+
+	case bool:
+		if v {
+			return 1.0, nil
+		} else {
+			return 0.0, nil
+		}
+
+	case time.Time:
+		return float64(v.UnixNano()), nil
+
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a number", value)}
+	}
+}
+
+var _ Expression = (*coerceString)(nil)
+
+type coerceString struct {
+	value Expression
+}
+
+func (c coerceString) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case nil:
+		return "null", nil
+	case string:
+		return v, nil
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	case bool:
+		return strconv.FormatBool(v), nil
+	case time.Time:
+		return v.Format(time.RFC3339Nano), nil
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a string", value)}
+	}
+}
+
 var _ Expression = (*coerceLowercase)(nil)
 
 type coerceLowercase struct {
@@ -601,7 +669,7 @@ func (c coerceLowercase) Calculate(src []byte) (any, error) {
 	case string:
 		return strings.ToLower(v), nil
 	default:
-		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a lowescase", value)}
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a lowescase", value)}
 	}
 }
 
@@ -621,7 +689,7 @@ func (c coerceUppercase) Calculate(src []byte) (any, error) {
 	case string:
 		return strings.ToUpper(v), nil
 	default:
-		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a uppercase", value)}
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a uppercase", value)}
 	}
 }
 
@@ -645,7 +713,7 @@ func (c coerceTitle) Calculate(src []byte) (any, error) {
 		}
 		return string(unicode.ToUpper(r)) + strings.ToLower(v[1:]), nil
 	default:
-		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a uppercase", value)}
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a uppercase", value)}
 	}
 }
 
@@ -671,7 +739,7 @@ func (c coerceDateTime) Calculate(src []byte) (any, error) {
 		}
 		return t, nil
 	default:
-		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupprted type COERCE for value: %v to a DateTime", value)}
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v to a DateTime", value)}
 	}
 }
 
