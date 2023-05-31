@@ -1,7 +1,6 @@
 package ksql
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -716,7 +715,6 @@ func TestParser(t *testing.T) {
 				assert.Error(err)
 				return
 			}
-			fmt.Println(err)
 			assert.NoError(err)
 
 			got, err := ex.Calculate([]byte(tc.src))
