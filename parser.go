@@ -35,19 +35,64 @@ var (
 			}
 		},
 		"_lowercase_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
-			return false, coerceLowercase{value: expression}, nil
+			expression = coerceLowercase{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
 		},
 		"_string_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
-			return false, coerceString{value: expression}, nil
+			expression = coerceString{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
 		},
 		"_number_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
-			return false, coerceNumber{value: expression}, nil
+			expression = coerceNumber{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
 		},
 		"_uppercase_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
-			return false, coerceUppercase{value: expression}, nil
+			expression = coerceUppercase{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
 		},
 		"_title_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
-			return false, coerceTitle{value: expression}, nil
+			expression = coerceTitle{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
 		},
 	})
 )
