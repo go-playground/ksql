@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-playground/itertools"
+	syncext "github.com/go-playground/pkg/v5/sync"
 	resultext "github.com/go-playground/pkg/v5/values/result"
 	"io"
 	"reflect"
@@ -17,6 +18,86 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var (
+	// Coercions is a `map` of all coercions guarded by a Mutex for use allowing registration,
+	// removal or even replacing of existing coercions.
+	Coercions = syncext.NewRWMutex2(map[string]func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error){
+		"_datetime_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			expression = coerceDateTime{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+		"_lowercase_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			expression = coerceLowercase{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+		"_string_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			expression = coerceString{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+		"_number_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			expression = coerceNumber{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+		"_uppercase_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			expression = coerceUppercase{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+		"_title_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			expression = coerceTitle{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+	})
+)
+
+// Expression Represents a stateless parsed expression that can be applied to JSON data.
 type Expression interface {
 
 	// Calculate will execute the parsed expression and apply it against the supplied data.
@@ -196,29 +277,19 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 				return nil, fmt.Errorf("COERCE missing data type identifier, found instead: %s", identifier)
 			}
 
-			switch identifier {
-			case "_datetime_":
-				expression = coerceDateTime{value: expression}
-				if constEligible {
-					value, err := expression.Calculate([]byte{})
-					if err != nil {
-						return nil, err
-					}
-					expression = coercedConstant{value: value}
+			guard := Coercions.RLock()
+			fn, found := guard.T[identifier]
+			guard.RUnlock()
+
+			if found {
+				constEligible, expression, err = fn(constEligible, expression)
+				if err != nil {
+					return nil, err
 				}
-			case "_lowercase_":
-				expression = coerceLowercase{value: expression}
-			case "_string_":
-				expression = coerceString{value: expression}
-			case "_number_":
-				expression = coerceNumber{value: expression}
-			case "_uppercase_":
-				expression = coerceUppercase{value: expression}
-			case "_title_":
-				expression = coerceTitle{value: expression}
-			default:
+			} else {
 				return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
 			}
+
 			nextPeeked := p.tokenizer.Peek()
 			if nextPeeked.IsSome() && nextPeeked.Unwrap().IsOk() && nextPeeked.Unwrap().Unwrap().kind == Comma {
 				_ = p.tokenizer.Next() // consume peeked comma

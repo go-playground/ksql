@@ -1,7 +1,9 @@
 package ksql
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 	"time"
 )
@@ -726,4 +728,42 @@ func TestParser(t *testing.T) {
 			assert.Equal(tc.expected, got)
 		})
 	}
+}
+
+type Star struct {
+	expression Expression
+}
+
+func (s *Star) Calculate(json []byte) (interface{}, error) {
+	inner, err := s.expression.Calculate(json)
+	if err != nil {
+		return nil, err
+	}
+
+	switch t := inner.(type) {
+	case string:
+		return strings.Repeat("*", len(t)), nil
+	default:
+		return nil, fmt.Errorf("cannot star value %v", inner)
+	}
+}
+
+func TestParserCustomCoercion(t *testing.T) {
+	assert := require.New(t)
+
+	guard := Coercions.Lock()
+	guard.T["_star_"] = func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+		return constEligible, &Star{expression}, nil
+	}
+	guard.Unlock()
+
+	expression := []byte(`COERCE "My Name" _star_`)
+	input := []byte(`{}`)
+	ex, err := Parse(expression)
+	assert.NoError(err)
+
+	result, err := ex.Calculate(input)
+	assert.NoError(err)
+
+	assert.Equal("*******", result)
 }
