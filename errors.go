@@ -88,3 +88,21 @@ type ErrUnsupportedCoerce struct {
 func (e ErrUnsupportedCoerce) Error() string {
 	return fmt.Sprintf("unsupported type comparison for COERCE: `%s`", e.s)
 }
+
+// ErrCustom represents a custom error
+type ErrCustom struct {
+	S string
+}
+
+func (e ErrCustom) Error() string {
+	return e.S
+}
+
+// ErrInvalidCoerce represents an invalid Coerce error
+type ErrInvalidCoerce struct {
+	Err error
+}
+
+func (e ErrInvalidCoerce) Error() string {
+	return fmt.Sprintf("invalid COERCE: `%s`", e.Err.Error())
+}

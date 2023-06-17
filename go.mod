@@ -5,8 +5,8 @@ go 1.18
 require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/go-playground/itertools v0.1.0
+	github.com/go-playground/pkg/v5 v5.20.0
 	github.com/stretchr/testify v1.8.1
-	github.com/go-playground/pkg/v5 v5.18.0
 	github.com/tidwall/gjson v1.14.4
 )
 

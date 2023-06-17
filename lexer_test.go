@@ -18,12 +18,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse double quote string",
 			input:  "\"quoted\"",
-			tokens: []Token{{kind: QuotedString, start: 0, len: 8}},
+			tokens: []Token{{Kind: QuotedString, Start: 0, Len: 8}},
 		},
 		{
 			name:   "parse double quote string blank",
 			input:  "\"\"",
-			tokens: []Token{{kind: QuotedString, start: 0, len: 2}},
+			tokens: []Token{{Kind: QuotedString, Start: 0, Len: 2}},
 		},
 		{
 			name:  "parse double quote string unterminated",
@@ -38,12 +38,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse single quote string",
 			input:  "'quoted'",
-			tokens: []Token{{kind: QuotedString, start: 0, len: 8}},
+			tokens: []Token{{Kind: QuotedString, Start: 0, Len: 8}},
 		},
 		{
 			name:   "parse single quote string blank",
 			input:  "''",
-			tokens: []Token{{kind: QuotedString, start: 0, len: 2}},
+			tokens: []Token{{Kind: QuotedString, Start: 0, Len: 2}},
 		},
 		{
 			name:  "parse single quote string unterminated",
@@ -58,12 +58,12 @@ func Test(t *testing.T) {
 		{
 			name:   "parse bool true",
 			input:  "true",
-			tokens: []Token{{kind: BooleanTrue, start: 0, len: 4}},
+			tokens: []Token{{Kind: BooleanTrue, Start: 0, Len: 4}},
 		},
 		{
 			name:   "parse bool false",
 			input:  "false",
-			tokens: []Token{{kind: BooleanFalse, start: 0, len: 5}},
+			tokens: []Token{{Kind: BooleanFalse, Start: 0, Len: 5}},
 		},
 		{
 			name:  "parse invalid bool",
@@ -73,17 +73,17 @@ func Test(t *testing.T) {
 		{
 			name:   "parse number float",
 			input:  "123.23",
-			tokens: []Token{{kind: Number, start: 0, len: 6}},
+			tokens: []Token{{Kind: Number, Start: 0, Len: 6}},
 		},
 		{
-			name:   "parse number exp",
+			name:   "parse number Exp",
 			input:  "1e-10",
-			tokens: []Token{{kind: Number, len: 5}},
+			tokens: []Token{{Kind: Number, Len: 5}},
 		},
 		{
 			name:   "parse number int",
 			input:  "123",
-			tokens: []Token{{kind: Number, len: 3}},
+			tokens: []Token{{Kind: Number, Len: 3}},
 		},
 		{
 			name:  "parse number invalid",
@@ -93,7 +93,7 @@ func Test(t *testing.T) {
 		{
 			name:   "parse identifier",
 			input:  ".properties.first_name",
-			tokens: []Token{{kind: SelectorPath, len: 22}},
+			tokens: []Token{{Kind: SelectorPath, Len: 22}},
 		},
 		{
 			name:  "parse identifier blank",
@@ -103,148 +103,148 @@ func Test(t *testing.T) {
 		{
 			name:   "parse equals",
 			input:  "==",
-			tokens: []Token{{kind: Equals, len: 2}},
+			tokens: []Token{{Kind: Equals, Len: 2}},
 		},
 		{
 			name:   "parse add",
 			input:  "+",
-			tokens: []Token{{kind: Add, len: 1}},
+			tokens: []Token{{Kind: Add, Len: 1}},
 		},
 		{
 			name:   "parse Substract",
 			input:  "-",
-			tokens: []Token{{kind: Subtract, len: 1}},
+			tokens: []Token{{Kind: Subtract, Len: 1}},
 		},
 		{
 			name:   "parse multiply",
 			input:  "*",
-			tokens: []Token{{kind: Multiply, len: 1}},
+			tokens: []Token{{Kind: Multiply, Len: 1}},
 		},
 		{
 			name:   "parse divide",
 			input:  "/",
-			tokens: []Token{{kind: Divide, len: 1}},
+			tokens: []Token{{Kind: Divide, Len: 1}},
 		},
 		{
 			name:   "parse gt",
 			input:  ">",
-			tokens: []Token{{kind: Gt, len: 1}},
+			tokens: []Token{{Kind: Gt, Len: 1}},
 		},
 		{
 			name:   "parse gte",
 			input:  ">=",
-			tokens: []Token{{kind: Gte, len: 2}},
+			tokens: []Token{{Kind: Gte, Len: 2}},
 		},
 		{
 			name:   "parse lt",
 			input:  "<",
-			tokens: []Token{{kind: Lt, len: 1}},
+			tokens: []Token{{Kind: Lt, Len: 1}},
 		},
 		{
 			name:   "parse lte",
 			input:  "<=",
-			tokens: []Token{{kind: Lte, len: 2}},
+			tokens: []Token{{Kind: Lte, Len: 2}},
 		},
 		{
 			name:   "parse open paren",
 			input:  "(",
-			tokens: []Token{{kind: OpenParen, len: 1}},
+			tokens: []Token{{Kind: OpenParen, Len: 1}},
 		},
 		{
 			name:   "parse close paren",
 			input:  ")",
-			tokens: []Token{{kind: CloseParen, len: 1}},
+			tokens: []Token{{Kind: CloseParen, Len: 1}},
 		},
 		{
 			name:   "parse open bracket",
 			input:  "[",
-			tokens: []Token{{kind: OpenBracket, len: 1}},
+			tokens: []Token{{Kind: OpenBracket, Len: 1}},
 		},
 		{
 			name:   "parse close bracket",
 			input:  "]",
-			tokens: []Token{{kind: CloseBracket, len: 1}},
+			tokens: []Token{{Kind: CloseBracket, Len: 1}},
 		},
 		{
 			name:   "parse comma",
 			input:  ",",
-			tokens: []Token{{kind: Comma, len: 1}},
+			tokens: []Token{{Kind: Comma, Len: 1}},
 		},
 		{
 			name:  "parse add selectorPath",
 			input: ".field1 + .field2",
 			tokens: []Token{
-				{kind: SelectorPath, len: 7},
-				{kind: Add, start: 8, len: 1},
-				{kind: SelectorPath, start: 10, len: 7},
+				{Kind: SelectorPath, Len: 7},
+				{Kind: Add, Start: 8, Len: 1},
+				{Kind: SelectorPath, Start: 10, Len: 7},
 			},
 		},
 		{
 			name:  "parse sub selectorPath",
 			input: ".field1 - .field2",
 			tokens: []Token{
-				{kind: SelectorPath, len: 7},
-				{kind: Subtract, start: 8, len: 1},
-				{kind: SelectorPath, start: 10, len: 7},
+				{Kind: SelectorPath, Len: 7},
+				{Kind: Subtract, Start: 8, Len: 1},
+				{Kind: SelectorPath, Start: 10, Len: 7},
 			},
 		},
 		{
 			name:  "parse brackets",
 			input: ".field1 - ( .field2 + .field3 )",
 			tokens: []Token{
-				{kind: SelectorPath, len: 7},
-				{kind: Subtract, start: 8, len: 1},
-				{kind: OpenParen, start: 10, len: 1},
-				{kind: SelectorPath, start: 12, len: 7},
-				{kind: Add, start: 20, len: 1},
-				{kind: SelectorPath, start: 22, len: 7},
-				{kind: CloseParen, start: 30, len: 1},
+				{Kind: SelectorPath, Len: 7},
+				{Kind: Subtract, Start: 8, Len: 1},
+				{Kind: OpenParen, Start: 10, Len: 1},
+				{Kind: SelectorPath, Start: 12, Len: 7},
+				{Kind: Add, Start: 20, Len: 1},
+				{Kind: SelectorPath, Start: 22, Len: 7},
+				{Kind: CloseParen, Start: 30, Len: 1},
 			},
 		},
 		{
 			name:   "parse or",
 			input:  "||",
-			tokens: []Token{{kind: Or, len: 2}},
+			tokens: []Token{{Kind: Or, Len: 2}},
 		},
 		{
 			name:   "parse in",
 			input:  " IN ",
-			tokens: []Token{{kind: In, start: 1, len: 2}},
+			tokens: []Token{{Kind: In, Start: 1, Len: 2}},
 		},
 		{
 			name:   "parse contains",
 			input:  " CONTAINS ",
-			tokens: []Token{{kind: Contains, start: 1, len: 8}},
+			tokens: []Token{{Kind: Contains, Start: 1, Len: 8}},
 		},
 		{
 			name:   "parse contains any",
 			input:  " CONTAINS_ANY ",
-			tokens: []Token{{kind: ContainsAny, start: 1, len: 12}},
+			tokens: []Token{{Kind: ContainsAny, Start: 1, Len: 12}},
 		},
 		{
 			name:   "parse contains all",
 			input:  " CONTAINS_ALL ",
-			tokens: []Token{{kind: ContainsAll, start: 1, len: 12}},
+			tokens: []Token{{Kind: ContainsAll, Start: 1, Len: 12}},
 		},
 		{
 			name:   "parse STARTSWITH",
 			input:  " STARTSWITH ",
-			tokens: []Token{{kind: StartsWith, start: 1, len: 10}},
+			tokens: []Token{{Kind: StartsWith, Start: 1, Len: 10}},
 		},
 		{
 			name:   "parse ENDSWITH",
 			input:  " ENDSWITH ",
-			tokens: []Token{{kind: EndsWith, start: 1, len: 8}},
+			tokens: []Token{{Kind: EndsWith, Start: 1, Len: 8}},
 		},
 		{
 			name:   "parse AND",
 			input:  "&&",
-			tokens: []Token{{kind: And, start: 0, len: 2}},
+			tokens: []Token{{Kind: And, Start: 0, Len: 2}},
 		},
 		{
 			name:   "parse NULL",
 			input:  "NULL",
-			tokens: []Token{{kind: Null, start: 0, len: 4}},
+			tokens: []Token{{Kind: Null, Start: 0, Len: 4}},
 		},
 		{
 			name:  "parse bad or",
@@ -284,7 +284,7 @@ func Test(t *testing.T) {
 		{
 			name:   "parse not",
 			input:  "!",
-			tokens: []Token{{kind: Not, start: 0, len: 1}},
+			tokens: []Token{{Kind: Not, Start: 0, Len: 1}},
 		},
 		{
 			name:  "parse bad identifier",
@@ -294,20 +294,20 @@ func Test(t *testing.T) {
 		{
 			name:   "parse identifier",
 			input:  "_datetime_",
-			tokens: []Token{{kind: Identifier, start: 0, len: 10}},
+			tokens: []Token{{Kind: Identifier, Start: 0, Len: 10}},
 		},
 		{
 			name:   "parse COERCE",
 			input:  "COERCE ",
-			tokens: []Token{{kind: Coerce, start: 0, len: 6}},
+			tokens: []Token{{Kind: Coerce, Start: 0, Len: 6}},
 		},
 		{
 			name:  "parse COERCE",
 			input: `COERCE "2022-01-02" _datetime_`,
 			tokens: []Token{
-				{kind: Coerce, start: 0, len: 6},
-				{kind: QuotedString, start: 7, len: 12},
-				{kind: Identifier, start: 20, len: 10},
+				{Kind: Coerce, Start: 0, Len: 6},
+				{Kind: QuotedString, Start: 7, Len: 12},
+				{Kind: Identifier, Start: 20, Len: 10},
 			},
 		},
 		{
@@ -333,32 +333,32 @@ func Test(t *testing.T) {
 		{
 			name:   "parse BETWEEN",
 			input:  "BETWEEN ",
-			tokens: []Token{{kind: Between, start: 0, len: 7}},
+			tokens: []Token{{Kind: Between, Start: 0, Len: 7}},
 		},
 		{
 			name:   "parse negative number",
 			input:  " -1.23 ",
-			tokens: []Token{{kind: Number, start: 1, len: 5}},
+			tokens: []Token{{Kind: Number, Start: 1, Len: 5}},
 		},
 		{
 			name:   "parse positive number",
 			input:  " +1.23 ",
-			tokens: []Token{{kind: Number, start: 1, len: 5}},
+			tokens: []Token{{Kind: Number, Start: 1, Len: 5}},
 		},
 		{
 			name:   "parse positive number",
 			input:  " +1.23 ",
-			tokens: []Token{{kind: Number, start: 1, len: 5}},
+			tokens: []Token{{Kind: Number, Start: 1, Len: 5}},
 		},
 		{
 			name:   "parse negative exponential number",
 			input:  " -1e10 ",
-			tokens: []Token{{kind: Number, start: 1, len: 5}},
+			tokens: []Token{{Kind: Number, Start: 1, Len: 5}},
 		},
 		{
 			name:   "parse positive exponential number",
 			input:  " +1e10 ",
-			tokens: []Token{{kind: Number, start: 1, len: 5}},
+			tokens: []Token{{Kind: Number, Start: 1, Len: 5}},
 		},
 	}
 

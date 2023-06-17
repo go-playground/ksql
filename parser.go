@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/go-playground/itertools"
 	syncext "github.com/go-playground/pkg/v5/sync"
+	optionext "github.com/go-playground/pkg/v5/values/option"
 	resultext "github.com/go-playground/pkg/v5/values/result"
 	"io"
 	"reflect"
@@ -21,8 +22,8 @@ import (
 var (
 	// Coercions is a `map` of all coercions guarded by a Mutex for use allowing registration,
 	// removal or even replacing of existing coercions.
-	Coercions = syncext.NewRWMutex2(map[string]func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error){
-		"_datetime_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+	Coercions = syncext.NewRWMutex2(map[string]func(p *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error){
+		"_datetime_": func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 			expression = coerceDateTime{value: expression}
 			if constEligible {
 				value, err := expression.Calculate([]byte{})
@@ -34,7 +35,7 @@ var (
 				return false, expression, nil
 			}
 		},
-		"_lowercase_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+		"_lowercase_": func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 			expression = coerceLowercase{value: expression}
 			if constEligible {
 				value, err := expression.Calculate([]byte{})
@@ -46,7 +47,7 @@ var (
 				return false, expression, nil
 			}
 		},
-		"_string_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+		"_string_": func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 			expression = coerceString{value: expression}
 			if constEligible {
 				value, err := expression.Calculate([]byte{})
@@ -58,7 +59,7 @@ var (
 				return false, expression, nil
 			}
 		},
-		"_number_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+		"_number_": func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 			expression = coerceNumber{value: expression}
 			if constEligible {
 				value, err := expression.Calculate([]byte{})
@@ -70,7 +71,7 @@ var (
 				return false, expression, nil
 			}
 		},
-		"_uppercase_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+		"_uppercase_": func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 			expression = coerceUppercase{value: expression}
 			if constEligible {
 				value, err := expression.Calculate([]byte{})
@@ -82,8 +83,112 @@ var (
 				return false, expression, nil
 			}
 		},
-		"_title_": func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+		"_title_": func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 			expression = coerceTitle{value: expression}
+			if constEligible {
+				value, err := expression.Calculate([]byte{})
+				if err != nil {
+					return false, nil, err
+				}
+				return constEligible, coercedConstant{value: value}, nil
+			} else {
+				return false, expression, nil
+			}
+		},
+		"_substr_": func(p *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+			// get substring info, expect the format to be _substr_[Start:end]
+
+			leftBracket := p.Tokenizer.Next()
+			if leftBracket.IsNone() {
+				return false, nil, ErrCustom{S: "Expected [ after _substr_"}
+			} else if leftBracket.Unwrap().IsErr() {
+				return false, nil, ErrInvalidCoerce{Err: leftBracket.Unwrap().Err()}
+			} else if leftBracket.Unwrap().Unwrap().Kind != OpenBracket {
+				return false, nil, ErrCustom{S: "Expected [ after _substr_"}
+			}
+
+			// number or colon
+			var startIndex optionext.Option[int]
+			token := p.Tokenizer.Next()
+			if token.IsNone() {
+				return false, nil, ErrCustom{S: "Expected number or colon after _substr_["}
+			} else if token.Unwrap().IsErr() {
+				return false, nil, ErrInvalidCoerce{Err: token.Unwrap().Err()}
+			} else {
+				token := token.Unwrap().Unwrap()
+				start := int(token.Start)
+				switch token.Kind {
+				case Colon:
+				case Number:
+					i64, err := strconv.ParseInt(string(p.Exp[start:start+int(token.Len)]), 10, 64)
+					if err != nil {
+						return false, nil, err
+					}
+					startIndex = optionext.Some(int(i64))
+				default:
+					return false, nil, ErrCustom{S: fmt.Sprintf("Expected number after _substr_[ but got %s", string(p.Exp[start:start+int(token.Len)]))}
+				}
+			}
+
+			// parse colon if not already
+			if startIndex.IsSome() {
+				colon := p.Tokenizer.Next()
+				if colon.IsNone() {
+					return false, nil, ErrCustom{S: "Expected : after _substr_[n"}
+				} else if colon.Unwrap().IsErr() {
+					return false, nil, ErrInvalidCoerce{Err: colon.Unwrap().Err()}
+				} else if colon.Unwrap().Unwrap().Kind != Colon {
+					return false, nil, ErrCustom{S: "Expected : after _substr_[n"}
+				}
+			}
+
+			// number or end bracket
+			var endIndex optionext.Option[int]
+			token = p.Tokenizer.Next()
+			if token.IsNone() {
+				return false, nil, ErrCustom{S: "Expected number or ] after _substr_["}
+			} else if token.Unwrap().IsErr() {
+				return false, nil, ErrInvalidCoerce{Err: token.Unwrap().Err()}
+			} else {
+				token := token.Unwrap().Unwrap()
+				start := int(token.Start)
+				switch token.Kind {
+				case CloseBracket:
+				case Number:
+					i64, err := strconv.ParseInt(string(p.Exp[start:start+int(token.Len)]), 10, 64)
+					if err != nil {
+						return false, nil, err
+					}
+					endIndex = optionext.Some(int(i64))
+				default:
+					return false, nil, ErrCustom{S: fmt.Sprintf("Expected number after _substr_[n: but got %s", string(p.Exp[start:start+int(token.Len)]))}
+				}
+			}
+
+			// parse close bracket if not already
+			if endIndex.IsSome() {
+				rightBracket := p.Tokenizer.Next()
+				if rightBracket.IsNone() {
+					return false, nil, ErrCustom{S: "Expected ] after _substr_[n:n"}
+				} else if rightBracket.Unwrap().IsErr() {
+					return false, nil, ErrInvalidCoerce{Err: rightBracket.Unwrap().Err()}
+				} else if rightBracket.Unwrap().Unwrap().Kind != CloseBracket {
+					return false, nil, ErrCustom{S: "Expected ] after _substr_[n:n"}
+				}
+			}
+
+			switch {
+			case startIndex.IsSome() && endIndex.IsSome() && startIndex.Unwrap() > endIndex.Unwrap():
+				return false, nil, ErrCustom{S: fmt.Sprintf("Start index %d cannot be greater than end index %d", startIndex.Unwrap(), endIndex.Unwrap())}
+			case startIndex.IsNone() && endIndex.IsNone():
+				return false, nil, ErrCustom{S: "Start and end index for substr cannot both be None"}
+			}
+
+			expression = coerceSubstr{
+				value: expression,
+				start: startIndex,
+				end:   endIndex,
+			}
 			if constEligible {
 				value, err := expression.Calculate([]byte{})
 				if err != nil {
@@ -111,9 +216,9 @@ type Expression interface {
 
 // Parse lex's' the provided expression and returns an Expression to be used/applied to data.
 func Parse(expression []byte) (Expression, error) {
-	p := parser{
-		exp:       expression,
-		tokenizer: itertools.Iter[resultext.Result[Token, error]](NewTokenizer(expression)).Peekable(),
+	p := Parser{
+		Exp:       expression,
+		Tokenizer: itertools.Iter[resultext.Result[Token, error]](NewTokenizer(expression)).Peekable(),
 	}
 
 	result, err := p.parseExpression()
@@ -128,15 +233,15 @@ func Parse(expression []byte) (Expression, error) {
 }
 
 // Parser parses and returns a supplied expression
-type parser struct {
-	exp       []byte
-	tokenizer itertools.PeekableIterator[resultext.Result[Token, error]]
+type Parser struct {
+	Exp       []byte
+	Tokenizer itertools.PeekableIterator[resultext.Result[Token, error]]
 }
 
-func (p *parser) parseExpression() (current Expression, err error) {
+func (p *Parser) parseExpression() (current Expression, err error) {
 
 	for {
-		next := p.tokenizer.Next()
+		next := p.Tokenizer.Next()
 		if next.IsNone() {
 			return current, nil
 		}
@@ -154,7 +259,7 @@ func (p *parser) parseExpression() (current Expression, err error) {
 			}
 
 		} else {
-			if token.kind == CloseParen {
+			if token.Kind == CloseParen {
 				return current, nil
 			}
 			// look for nextToken operation
@@ -166,14 +271,14 @@ func (p *parser) parseExpression() (current Expression, err error) {
 	}
 }
 
-func (p *parser) parseValue(token Token) (Expression, error) {
-	switch token.kind {
+func (p *Parser) parseValue(token Token) (Expression, error) {
+	switch token.Kind {
 	case OpenBracket:
 		arr := make([]Expression, 0, 2)
 
 	FOR:
 		for {
-			next := p.tokenizer.Next()
+			next := p.Tokenizer.Next()
 			if next.IsNone() {
 				return nil, errors.New("unclosed Array '['")
 			}
@@ -183,7 +288,7 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 			}
 			token := result.Unwrap()
 
-			switch token.kind {
+			switch token.Kind {
 			case CloseBracket:
 				break FOR
 			case Comma:
@@ -195,7 +300,7 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 				}
 				arr = append(arr, value)
 			}
-			if token.kind == CloseBracket {
+			if token.Kind == CloseBracket {
 				break
 			}
 		}
@@ -213,20 +318,20 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 		return expression, nil
 
 	case SelectorPath:
-		start := int(token.start)
+		start := int(token.Start)
 		return selectorPath{
-			s: string(p.exp[start+1 : start+int(token.len)]),
+			s: string(p.Exp[start+1 : start+int(token.Len)]),
 		}, nil
 
 	case QuotedString:
-		start := int(token.start)
+		start := int(token.Start)
 		return str{
-			s: string(p.exp[start+1 : start+int(token.len)-1]),
+			s: string(p.Exp[start+1 : start+int(token.Len)-1]),
 		}, nil
 
 	case Number:
-		start := int(token.start)
-		f64, err := strconv.ParseFloat(string(p.exp[start:start+int(token.len)]), 64)
+		start := int(token.Start)
+		f64, err := strconv.ParseFloat(string(p.Exp[start:start+int(token.Len)]), 64)
 		if err != nil {
 			return nil, err
 		}
@@ -250,7 +355,7 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 			return nil, err
 		}
 		var constEligible bool
-		switch nextToken.kind {
+		switch nextToken.Kind {
 		case QuotedString, Number, BooleanTrue, BooleanFalse, Null:
 			constEligible = true
 		}
@@ -261,7 +366,7 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 		}
 
 		for {
-			next := p.tokenizer.Next()
+			next := p.Tokenizer.Next()
 			if next.IsNone() {
 				return nil, errors.New("no identifier after value for: COERCE")
 			}
@@ -270,10 +375,10 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 				return nil, result.Err()
 			}
 			identifierToken := result.Unwrap()
-			start := int(identifierToken.start)
-			identifier := string(p.exp[start : start+int(identifierToken.len)])
+			start := int(identifierToken.Start)
+			identifier := string(p.Exp[start : start+int(identifierToken.Len)])
 
-			if identifierToken.kind != Identifier {
+			if identifierToken.Kind != Identifier {
 				return nil, fmt.Errorf("COERCE missing data type identifier, found instead: %s", identifier)
 			}
 
@@ -282,7 +387,7 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 			guard.RUnlock()
 
 			if found {
-				constEligible, expression, err = fn(constEligible, expression)
+				constEligible, expression, err = fn(p, constEligible, expression)
 				if err != nil {
 					return nil, err
 				}
@@ -290,9 +395,9 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 				return nil, fmt.Errorf("invalid COERCE data type '%s'", identifier)
 			}
 
-			nextPeeked := p.tokenizer.Peek()
-			if nextPeeked.IsSome() && nextPeeked.Unwrap().IsOk() && nextPeeked.Unwrap().Unwrap().kind == Comma {
-				_ = p.tokenizer.Next() // consume peeked comma
+			nextPeeked := p.Tokenizer.Peek()
+			if nextPeeked.IsSome() && nextPeeked.Unwrap().IsOk() && nextPeeked.Unwrap().Unwrap().Kind == Comma {
+				_ = p.Tokenizer.Next() // consume peeked comma
 				continue
 			}
 			break
@@ -315,8 +420,8 @@ func (p *parser) parseValue(token Token) (Expression, error) {
 	}
 }
 
-func (p *parser) parseOperation(token Token, current Expression) (Expression, error) {
-	switch token.kind {
+func (p *Parser) parseOperation(token Token, current Expression) (Expression, error) {
+	switch token.Kind {
 	case Add:
 		nextToken, err := p.nextOperatorToken(token)
 		if err != nil {
@@ -599,11 +704,11 @@ func (p *parser) parseOperation(token Token, current Expression) (Expression, er
 	}
 }
 
-func (p *parser) nextOperatorToken(operationToken Token) (token Token, err error) {
-	next := p.tokenizer.Next()
+func (p *Parser) nextOperatorToken(operationToken Token) (token Token, err error) {
+	next := p.Tokenizer.Next()
 	if next.IsNone() {
-		start := int(operationToken.start)
-		err = fmt.Errorf("no value found after operation: %s", string(p.exp[start:start+int(operationToken.len)]))
+		start := int(operationToken.Start)
+		err = fmt.Errorf("no value found after operation: %s", string(p.Exp[start:start+int(operationToken.Len)]))
 		return
 	}
 	result := next.Unwrap()
@@ -1553,4 +1658,49 @@ func (a array) Calculate(src []byte) (any, error) {
 		arr = append(arr, res)
 	}
 	return arr, nil
+}
+
+type coerceSubstr struct {
+	value Expression
+	start optionext.Option[int]
+	end   optionext.Option[int]
+}
+
+func (c coerceSubstr) Calculate(src []byte) (any, error) {
+	value, err := c.value.Calculate(src)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := value.(type) {
+	case string:
+		switch {
+		case c.start.IsSome() && c.end.IsSome():
+			start, end := c.start.Unwrap(), c.end.Unwrap()
+			if start < 0 || start > len(v) || end < 0 || end > len(v) {
+				return nil, nil
+			}
+			return v[start:end], nil
+
+		case c.start.IsSome() && c.end.IsNone():
+			start := c.start.Unwrap()
+			if start < 0 || start > len(v) {
+				return nil, nil
+			}
+			return v[start:], nil
+
+		case c.start.IsNone() && c.end.IsSome():
+			end := c.end.Unwrap()
+			if end < 0 || end > len(v) {
+				return nil, nil
+			}
+			return v[:end], nil
+
+		default:
+			return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v for substr, [%v:%v]", value, c.start, c.end)}
+		}
+
+	default:
+		return nil, ErrUnsupportedCoerce{s: fmt.Sprintf("unsupported type COERCE for value: %v for substr", value)}
+	}
 }

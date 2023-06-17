@@ -1,6 +1,6 @@
 ksql
 =====
-![Project status](https://img.shields.io/badge/version-0.8.0-green.svg)
+![Project status](https://img.shields.io/badge/version-0.9.0-green.svg)
 [![GoDoc](https://godoc.org/github.com/go-playground/ksql?status.svg)](https://pkg.go.dev/github.com/go-playground/ksql)
 ![License](https://img.shields.io/dub/l/vibe-d.svg)
 
@@ -86,17 +86,19 @@ Expressions support most mathematical and string expressions see below for detai
 | `NULL`         | `NULL`                   | N/A                                                                                                                                                                                       |
 | `Coerce`       | `COERCE`                 | Coerces one data type into another using in combination with 'Identifier'. Syntax is `COERCE <expression> _identifer_`.                                                                   |
 | `Identifier`   | `_identifier_`           | Starts and end with an `_` used with 'COERCE' to cast data types, see table below with supported values. You can combine multiple coercions if separated by a COMMA.                      |
+| `Colon`        | `:`                      | N/A                                                                                                                                                                                       |
 
 #### COERCE Types
 
-| Type          | Description                                                                                                              |
-|---------------|--------------------------------------------------------------------------------------------------------------------------|
-| `_datetime_`  | This attempts to convert the type into a DateTime.                                                                       |
-| `_lowercase_` | This converts the text into lowercase.                                                                                   |
-| `_uppercase_` | This converts the text into uppercase.                                                                                   |
-| `_title_`     | This converts the text into title case, when the first letter is capitalized but the rest lower cased.                   |
-| `_string_`    | This converts the value into a string and supports the Value's String, Number, Bool, DateTime with nanosecond precision. |
-| `_number_`    | This converts the value into an f64 number and supports the Value's Null, String, Number, Bool and DateTime.             |
+| Type            | Description                                                                                                              |
+|-----------------|--------------------------------------------------------------------------------------------------------------------------|
+| `_datetime_`    | This attempts to convert the type into a DateTime.                                                                       |
+| `_lowercase_`   | This converts the text into lowercase.                                                                                   |
+| `_uppercase_`   | This converts the text into uppercase.                                                                                   |
+| `_title_`       | This converts the text into title case, when the first letter is capitalized but the rest lower cased.                   |
+| `_string_`      | This converts the value into a string and supports the Value's String, Number, Bool, DateTime with nanosecond precision. |
+| `_number_`      | This converts the value into an f64 number and supports the Value's Null, String, Number, Bool and DateTime.             |
+| `_substr_[n:n]` | This allows taking a substring of a string value. this returns Null if no match at specified indices exits.              |
 
 #### License
 
