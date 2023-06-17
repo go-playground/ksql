@@ -7,9 +7,9 @@ import (
 
 // Token represents a lexed token
 type Token struct {
-	start uint32
-	len   uint16
-	kind  TokenKind
+	Start uint32
+	Len   uint16
+	Kind  TokenKind
 }
 
 // LexerResult represents a token lexed result
@@ -54,6 +54,7 @@ const (
 	CloseParen
 	Coerce
 	Identifier
+	Colon
 )
 
 // / Try to lex a single token from the input stream.
@@ -108,6 +109,8 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 		result = LexerResult{kind: Comma, len: 1}
 	case '!':
 		result = LexerResult{kind: Not, len: 1}
+	case ':':
+		result = LexerResult{kind: Colon, len: 1}
 	case '"', '\'':
 		result, err = tokenizeString(data, b)
 	case '.':
@@ -168,9 +171,9 @@ func tokenizeSingleToken(data []byte) (result LexerResult, err error) {
 
 func tokenizeIdentifier(data []byte) (result LexerResult, err error) {
 	end := takeWhile(data, func(b byte) bool {
-		return !isWhitespace(b) && b != ')' && b != ']' && b != ','
+		return !isWhitespace(b) && b != ')' && b != '[' && b != ']' && b != ','
 	})
-	// identifier must start and end with underscore
+	// identifier must Start and end with underscore
 	if end > 0 && data[end-1] == '_' {
 		result = LexerResult{
 			kind: Identifier,
@@ -351,7 +354,7 @@ func skipWhitespace(data []byte) uint16 {
 	})
 }
 
-// NewTokenizer creates a new tokenizer for use
+// NewTokenizer creates a new Tokenizer for use
 func NewTokenizer(src []byte) *Tokenizer {
 	return &Tokenizer{
 		pos:       0,
@@ -379,9 +382,9 @@ func (t *Tokenizer) nextToken() optionext.Option[resultext.Result[Token, error]]
 		return optionext.Some(resultext.Err[Token, error](err))
 	}
 	token := Token{
-		start: t.pos,
-		len:   result.len,
-		kind:  result.kind,
+		Start: t.pos,
+		Len:   result.len,
+		Kind:  result.kind,
 	}
 	t.chomp(result.len)
 	return optionext.Some(resultext.Ok[Token, error](token))

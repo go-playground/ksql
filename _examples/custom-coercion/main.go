@@ -29,7 +29,7 @@ func main() {
 	// Add custom coercion to the parser.
 	// REMEMBER: coercions start and end with an _(underscore).
 	guard := ksql.Coercions.Lock()
-	guard.T["_star_"] = func(constEligible bool, expression ksql.Expression) (stillConstEligible bool, e ksql.Expression, err error) {
+	guard.T["_star_"] = func(_ *ksql.Parser, constEligible bool, expression ksql.Expression) (stillConstEligible bool, e ksql.Expression, err error) {
 		return constEligible, &Star{expression}, nil
 	}
 	guard.Unlock()

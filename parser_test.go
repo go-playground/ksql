@@ -705,6 +705,36 @@ func TestParser(t *testing.T) {
 			src:      `{"key":"2023-05-30T06:21:05Z"}`,
 			expected: 1.685427665e18,
 		},
+		{
+			name:     "COERCE Name Start Substring",
+			exp:      `COERCE .name _substr_[4:]`,
+			src:      `{"name":"Joeybloggs"}`,
+			expected: "bloggs",
+		},
+		{
+			name:     "COERCE Name End Substring",
+			exp:      `COERCE .name _substr_[:4]`,
+			src:      `{"name":"Joeybloggs"}`,
+			expected: "Joey",
+		},
+		{
+			name:     "COERCE Name Substring",
+			exp:      `COERCE .name _substr_[3:5]`,
+			src:      `{"name":"Joeybloggs"}`,
+			expected: "yb",
+		},
+		{
+			name:     "COERCE Name Substring Const Eligible",
+			exp:      `COERCE "Joeybloggs" _substr_[3:5]`,
+			src:      `{}`,
+			expected: "yb",
+		},
+		{
+			name:     "COERCE Substring Index beyond bounds",
+			exp:      `COERCE .name _substr_[500:1000]`,
+			src:      `{"name":"Joeybloggs"}`,
+			expected: nil,
+		},
 	}
 
 	for _, tc := range tests {
@@ -752,7 +782,7 @@ func TestParserCustomCoercion(t *testing.T) {
 	assert := require.New(t)
 
 	guard := Coercions.Lock()
-	guard.T["_star_"] = func(constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
+	guard.T["_star_"] = func(_ *Parser, constEligible bool, expression Expression) (stillConstEligible bool, e Expression, err error) {
 		return constEligible, &Star{expression}, nil
 	}
 	guard.Unlock()
