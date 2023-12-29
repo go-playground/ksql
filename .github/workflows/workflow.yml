@@ -1,14 +1,17 @@
+name: Lint & Test
 on:
-  push:
-    branches:
-      - master
   pull_request:
-name: Test
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.20.x,1.19.x]
+        go-version: [1.21.x,1.20.x]
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -32,7 +35,7 @@ jobs:
         run: go test -race -covermode=atomic -coverprofile="profile.cov" ./...
 
       - name: Send Coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.20.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21.x'
         uses: shogo82148/actions-goveralls@v1
         with:
           path-to-profile: profile.cov
